@@ -1,0 +1,1 @@
+npm run dev in terminal
