@@ -1,0 +1,91 @@
+[2m2:07:23 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: [postcss] D:/02 DevX/พี่เซฟ/writer/src/styles.css:218:3: Unknown word bo[39m
+  Plugin: [35mvite:css[39m
+  File: [36mD:/02 DevX/พี่เซฟ/writer/src/styles.css[39m:218:2
+[33m  216 |    height: 32px;
+  217 |    margin-left: auto;
+  218 |    bo
+      |    ^
+  219 |  }
+  220 |  [39m
+      at Input.error (D:\02 DevX\พี่เซฟ\writer\node_modules\postcss\lib\input.js:135:16)
+      at Parser.unknownWord (D:\02 DevX\พี่เซฟ\writer\node_modules\postcss\lib\parser.js:602:22)
+      at Parser.other (D:\02 DevX\พี่เซฟ\writer\node_modules\postcss\lib\parser.js:444:12)
+      at Parser.parse (D:\02 DevX\พี่เซฟ\writer\node_modules\postcss\lib\parser.js:479:16)
+      at parse (D:\02 DevX\พี่เซฟ\writer\node_modules\postcss\lib\parse.js:11:12)
+      at new LazyResult (D:\02 DevX\พี่เซฟ\writer\node_modules\postcss\lib\lazy-result.js:165:16)
+      at Processor.process (D:\02 DevX\พี่เซฟ\writer\node_modules\postcss\lib\processor.js:53:14)
+      at runPostCSS (file:///D:/02%20DevX/%E0%B8%9E%E0%B8%B5%E0%B9%88%E0%B9%80%E0%B8%8B%E0%B8%9F/writer/node_modules/vite/dist/node/chunks/config.js:30225:68)
+      at async compilePostCSS (file:///D:/02%20DevX/%E0%B8%9E%E0%B8%B5%E0%B9%88%E0%B9%80%E0%B8%8B%E0%B8%9F/writer/node_modules/vite/dist/node/chunks/config.js:30209:6)
+      at async compileCSS (file:///D:/02%20DevX/%E0%B8%9E%E0%B8%B5%E0%B9%88%E0%B9%80%E0%B8%8B%E0%B8%9F/writer/node_modules/vite/dist/node/chunks/config.js:30139:26)
+[2m4:25:58 PM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m Pre-transform error: Transform failed with 3 errors:
+D:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx:33:10: ERROR: Unexpected closing "button" tag does not match opening "div" tag
+D:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx:39:8: ERROR: Unexpected closing "div" tag does not match opening "header" tag
+D:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx:41:11: ERROR: Expected ")" but found "className"
+  Plugin: [35mvite:esbuild[39m
+  File: [36mD:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx[39m:33:10
+[33m  
+  [33mUnexpected closing "button" tag does not match opening "div" tag[33m
+  31 |          
+  32 |            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+  33 |          </button>
+     |            ^
+  34 |          <div className="top-title">
+  35 |            <span className="eyebrow">Novel Studio</span>
+  
+  [33mUnexpected closing "div" tag does not match opening "header" tag[33m
+  37 |            <p className="status-line">{message}</p>
+  38 |          </div>
+  39 |        </div>
+     |          ^
+  40 |  
+  41 |        <nav className="stepper-container" aria-label="workflow">
+  
+  [33mExpected ")" but found "className"[33m
+  39 |        </div>
+  40 |  
+  41 |        <nav className="stepper-container" aria-label="workflow">
+     |             ^
+  42 |          {workflowRoutes.map((item, index) => (
+  43 |            <button
+  [39m
+[2m4:25:58 PM[22m [31m[1m[vite][22m[39m [31mInternal server error: Transform failed with 3 errors:
+D:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx:33:10: ERROR: Unexpected closing "button" tag does not match opening "div" tag
+D:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx:39:8: ERROR: Unexpected closing "div" tag does not match opening "header" tag
+D:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx:41:11: ERROR: Expected ")" but found "className"[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mD:/02 DevX/พี่เซฟ/writer/src/components/TopBar.tsx[39m:33:10
+[33m  
+  [33mUnexpected closing "button" tag does not match opening "div" tag[33m
+  31 |          
+  32 |            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+  33 |          </button>
+     |            ^
+  34 |          <div className="top-title">
+  35 |            <span className="eyebrow">Novel Studio</span>
+  
+  [33mUnexpected closing "div" tag does not match opening "header" tag[33m
+  37 |            <p className="status-line">{message}</p>
+  38 |          </div>
+  39 |        </div>
+     |          ^
+  40 |  
+  41 |        <nav className="stepper-container" aria-label="workflow">
+  
+  [33mExpected ")" but found "className"[33m
+  39 |        </div>
+  40 |  
+  41 |        <nav className="stepper-container" aria-label="workflow">
+     |             ^
+  42 |          {workflowRoutes.map((item, index) => (
+  43 |            <button
+  [39m
+      at failureErrorWithLog (D:\02 DevX\พี่เซฟ\writer\node_modules\esbuild\lib\main.js:1748:15)
+      at D:\02 DevX\พี่เซฟ\writer\node_modules\esbuild\lib\main.js:1017:50
+      at responseCallbacks.<computed> (D:\02 DevX\พี่เซฟ\writer\node_modules\esbuild\lib\main.js:884:9)
+      at handleIncomingPacket (D:\02 DevX\พี่เซฟ\writer\node_modules\esbuild\lib\main.js:939:12)
+      at Socket.readFromStdout (D:\02 DevX\พี่เซฟ\writer\node_modules\esbuild\lib\main.js:862:7)
+      at Socket.emit (node:events:518:28)
+      at addChunk (node:internal/streams/readable:561:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+      at Readable.push (node:internal/streams/readable:392:5)
+      at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
