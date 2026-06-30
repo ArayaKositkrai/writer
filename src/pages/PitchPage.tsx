@@ -1,10 +1,12 @@
 import PitchLab from '../components/PitchLab';
-import { NovelProject, WorkflowStep } from '../types';
+import { AiSettings, NovelProject, WorkflowStep } from '../types';
 
 interface PitchPageProps {
   project: NovelProject;
+  aiSettings: AiSettings;
   updateProject: (updater: (project: NovelProject) => NovelProject, notice?: string) => void;
   goToStep: (step: WorkflowStep) => void;
+  onNotice: (notice: string) => void;
 }
 
 function PitchPage(props: PitchPageProps) {

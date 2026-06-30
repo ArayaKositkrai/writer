@@ -1,26 +1,30 @@
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, FilePenLine, ScanText, Sparkles, WandSparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Download, FileJson, FilePenLine, ScanText, Sparkles, WandSparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { draftChapter, reviewChapter, reviseChapterFromReviews } from '../services/aiService';
-import { ChapterPlan, NovelProject, ReviewItem, WorkflowStep } from '../types';
+import { downloadChapterJson, downloadChapterMarkdown } from '../services/exporter';
+import { AiSettings, ChapterPlan, NovelProject, ReviewItem, WorkflowStep } from '../types';
 
 interface ChapterWriterProps {
   project: NovelProject;
   chapter: ChapterPlan;
+  aiSettings: AiSettings;
   updateProject: (updater: (project: NovelProject) => NovelProject, notice?: string) => void;
   goToStep: (step: WorkflowStep) => void;
+  onNotice: (notice: string) => void;
 }
 
-type WriterTab = 'brief' | 'draft' | 'summary' | 'quality';
+type WriterTab = 'brief' | 'draft' | 'summary' | 'quality' | 'final';
 type BriefField = keyof Pick<ChapterPlan, 'title' | 'summary' | 'goal' | 'conflict' | 'outcome' | 'cliffhanger'>;
 
 function getInitialTab(chapter: ChapterPlan): WriterTab {
-  if (chapter.status === 'reviewing' || chapter.status === 'main') return 'summary';
+  if (chapter.status === 'main' && chapter.mainText.trim()) return 'final';
+  if (chapter.status === 'reviewing') return 'summary';
   if ((chapter.draft || chapter.mainText).trim()) return 'draft';
   return 'brief';
 }
 
-function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWriterProps) {
-  const text = chapter.draft || chapter.mainText;
+function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, onNotice }: ChapterWriterProps) {
+  const text = chapter.status === 'main' ? chapter.mainText || chapter.draft : chapter.draft || chapter.mainText;
   const hasText = Boolean(text.trim());
   const [activeTab, setActiveTab] = useState<WriterTab>(() => getInitialTab(chapter));
   const [briefApproved, setBriefApproved] = useState(hasText);
@@ -28,6 +32,7 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
   const [isReviewing, setIsReviewing] = useState(false);
   const [isApplyingFixes, setIsApplyingFixes] = useState(false);
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
+  const [copiedText, setCopiedText] = useState(false);
   const chapterIndex = project.chapters.findIndex((item) => item.id === chapter.id);
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
   const reviews = project.reviews[chapter.id] ?? [];
@@ -57,7 +62,7 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
   async function handleDraft() {
     setIsDrafting(true);
     try {
-      const { text: draft, job } = await draftChapter(project, chapter);
+      const { text: draft, job } = await draftChapter(project, chapter, aiSettings);
       updateProject(
         (current) => ({
           ...current,
@@ -68,6 +73,8 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
         }),
         `AI เขียนร่างตอนที่ ${chapter.number} แล้ว`,
       );
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : 'เขียนร่างไม่สำเร็จ');
     } finally {
       setIsDrafting(false);
     }
@@ -83,13 +90,15 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
     setIsReviewing(true);
     setSelectedIssueIds([]);
     try {
-      const { items, job } = await reviewChapter(project, chapter);
+      const { items, job } = await reviewChapter(project, chapter, aiSettings);
       updateProject((current) => ({
         ...current,
         chapters: current.chapters.map((item) => item.id === chapter.id ? { ...item, status: 'reviewing' } : item),
         reviews: { ...current.reviews, [chapter.id]: items },
         jobs: [...current.jobs, job],
       }), `ตรวจคุณภาพตอนที่ ${chapter.number} แล้ว`);
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : 'ตรวจคุณภาพไม่สำเร็จ');
     } finally {
       setIsReviewing(false);
     }
@@ -104,7 +113,7 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
     if (!selectedReviews.length) return;
     setIsApplyingFixes(true);
     try {
-      const { text: revisedText, job } = await reviseChapterFromReviews(project, chapter, selectedReviews);
+      const { text: revisedText, job } = await reviseChapterFromReviews(project, chapter, selectedReviews, aiSettings);
       updateProject((current) => ({
         ...current,
         chapters: current.chapters.map((item) =>
@@ -119,6 +128,8 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
         jobs: [...current.jobs, job],
       }), `AI แก้ไข ${selectedReviews.length} ประเด็นแล้ว`);
       goToStep('export');
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : 'แก้ไขต้นฉบับไม่สำเร็จ');
     } finally {
       setIsApplyingFixes(false);
     }
@@ -130,6 +141,16 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
       chapters: current.chapters.map((item) => item.id === chapter.id ? { ...item, status: 'reviewing' } : item),
     }));
     goToStep('export');
+  }
+
+  async function copyFinalText() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedText(true);
+      window.setTimeout(() => setCopiedText(false), 1800);
+    } catch {
+      setCopiedText(false);
+    }
   }
 
   return (
@@ -145,9 +166,9 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
             </div>
           </div>
           <div className="writer-header-actions">
-            <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('board')}>
-              <ArrowLeft size={17} /> กลับไปเลือกตอน
-            </button>
+            {/* <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('board')}>
+              <ArrowLeft size={17} /> กลับไปเลือกตอน Step 4
+            </button> */}
             <div className="writer-chapter-nav">
               <button type="button" className="icon-button" onClick={() => moveToChapter(-1)} disabled={chapterIndex <= 0} aria-label="ตอนก่อนหน้า"><ChevronLeft size={18} /></button>
               <span>{chapter.number} / {project.chapters.length}</span>
@@ -164,11 +185,14 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
             <button type="button" className={activeTab === 'draft' ? 'active' : hasText ? 'done' : ''} disabled={!briefApproved} onClick={() => setActiveTab('draft')}>
               <b>2</b><span>เขียนร่าง</span>
             </button>
-            <button type="button" className={activeTab === 'summary' ? 'active' : ''} disabled={!hasText} onClick={() => setActiveTab('summary')}>
+            <button type="button" className={activeTab === 'summary' ? 'active' : chapter.status === 'reviewing' || chapter.status === 'main' ? 'done' : ''} disabled={!hasText} onClick={() => setActiveTab('summary')}>
               <b>3</b><span>ภาพรวมก่อนบันทึก</span>
             </button>
-            <button type="button" className={activeTab === 'quality' ? 'active' : chapter.status === 'reviewing' ? 'done' : ''} disabled={!hasText} onClick={() => setActiveTab('quality')}>
+            <button type="button" className={activeTab === 'quality' ? 'active' : chapter.status === 'reviewing' || chapter.status === 'main' ? 'done' : ''} disabled={!hasText} onClick={() => setActiveTab('quality')}>
               <b>4</b><span>ตรวจคุณภาพ</span>
+            </button>
+            <button type="button" className={activeTab === 'final' ? 'active' : chapter.status === 'main' ? 'done' : ''} disabled={chapter.status !== 'main' || !chapter.mainText.trim()} onClick={() => setActiveTab('final')}>
+              <b>5</b><span>เนื้อหาสมบูรณ์</span>
             </button>
           </nav>
 
@@ -271,6 +295,30 @@ function ChapterWriter({ project, chapter, updateProject, goToStep }: ChapterWri
                     </div>
                   </>
                 )}
+              </section>
+            )}
+
+            {activeTab === 'final' && (
+              <section className="writer-final-tab">
+                <div className="writer-final-heading">
+                  <div>
+                    <span className="status-badge main">ตอนหลัก</span>
+                    <h3>ตอนที่ {chapter.number}: {chapter.title}</h3>
+                    <p>เนื้อหาฉบับสมบูรณ์ที่บันทึกจาก Step 6 · {wordCount.toLocaleString('th-TH')} คำ</p>
+                  </div>
+                  <div className="writer-final-actions" aria-label="ดาวน์โหลดและคัดลอกเนื้อหาสมบูรณ์">
+                    <button type="button" className="secondary-button" onClick={() => downloadChapterMarkdown(project, chapter)}>
+                      <Download size={16} /> Markdown
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => downloadChapterJson(project, chapter)}>
+                      <FileJson size={16} /> JSON
+                    </button>
+                    <button type="button" className="accent-button" onClick={copyFinalText}>
+                      {copiedText ? <Check size={16} /> : <Copy size={16} />} Text
+                    </button>
+                  </div>
+                </div>
+                <article className="writer-final-manuscript">{text}</article>
               </section>
             )}
           </div>

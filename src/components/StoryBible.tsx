@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Plus, Trash2 } from 'luc
 import { useState } from 'react';
 import { createId } from '../data/defaultProject';
 import { CharacterProfile, NovelProject, StoryBible as StoryBibleData, WorkflowStep } from '../types';
+import ConfirmDialog from './ConfirmDialog';
 
 interface StoryBibleProps {
   project: NovelProject;
@@ -43,6 +44,7 @@ function BibleHelpTooltip({ text }: { text: string }) {
 }
 
 function StoryBible({ project, updateProject, goToStep }: StoryBibleProps) {
+  const [characterPendingDelete, setCharacterPendingDelete] = useState<CharacterProfile | null>(null);
   const bible = project.bible;
 
   function updateBibleField(field: keyof Pick<StoryBibleData, 'premise' | 'worldRules' | 'styleGuide'>, value: string) {
@@ -102,6 +104,7 @@ function StoryBible({ project, updateProject, goToStep }: StoryBibleProps) {
         characters: current.bible.characters.filter((character) => character.id !== id),
       },
     }), 'ลบตัวละครแล้ว');
+    setCharacterPendingDelete(null);
   }
 
   return (
@@ -118,11 +121,11 @@ function StoryBible({ project, updateProject, goToStep }: StoryBibleProps) {
           </div>
           <div className="story-header-actions">
             <span className="story-save-state"><CheckCircle2 size={15} /> บันทึกอัตโนมัติ</span>
-            <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('pitch')}>
+            {/* <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('pitch')}>
               <ArrowLeft size={17} /> กลับไป Step 2
-            </button>
+            </button> */}
             <button type="button" className="story-next-button" onClick={() => goToStep('board')}>
-              ไป Chapter Board
+              ถัดไป : Step 4 เลือกตอน
               <ArrowRight size={17} />
             </button>
           </div>
@@ -209,7 +212,7 @@ function StoryBible({ project, updateProject, goToStep }: StoryBibleProps) {
                   <article className="story-character-card" key={character.id}>
                     <div className="story-character-top">
                       <span>ตัวละคร {index + 1}</span>
-                      <button type="button" className="story-delete-character" onClick={() => deleteCharacter(character.id)} aria-label={`ลบ ${character.name}`}>
+                      <button type="button" className="story-delete-character" onClick={() => setCharacterPendingDelete(character)} aria-label={`ลบ ${character.name}`}>
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -242,6 +245,13 @@ function StoryBible({ project, updateProject, goToStep }: StoryBibleProps) {
           </section>
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(characterPendingDelete)}
+        title="ยืนยันการลบตัวละคร"
+        description={characterPendingDelete ? `ต้องการลบ “${characterPendingDelete.name || 'ตัวละครนี้'}” ออกจาก Story Bible หรือไม่?` : ''}
+        onCancel={() => setCharacterPendingDelete(null)}
+        onConfirm={() => characterPendingDelete && deleteCharacter(characterPendingDelete.id)}
+      />
     </div>
   );
 }

@@ -1,12 +1,14 @@
-import { ArrowLeft, ArrowRight, Check, Copy, LoaderCircle, Pencil, Sparkles, X } from 'lucide-react';
-import { useState } from 'react';
-import { buildPitchPrompt, buildStoryBibleFromPitch, generatePitchOptions } from '../services/aiService';
-import { NovelProject, PitchOption, WorkflowStep } from '../types';
+import { ArrowLeft, ArrowRight, Check, CircleAlert, Copy, LoaderCircle, Pencil, Sparkles, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { buildPitchIdeaSignature, buildPitchPrompt, buildStoryBibleFromPitch, generatePitchOptions } from '../services/aiService';
+import { AiSettings, NovelProject, PitchOption, WorkflowStep } from '../types';
 
 interface PitchLabProps {
   project: NovelProject;
+  aiSettings: AiSettings;
   updateProject: (updater: (project: NovelProject) => NovelProject, notice?: string) => void;
   goToStep: (step: WorkflowStep) => void;
+  onNotice: (notice: string) => void;
 }
 
 function PitchHelpTooltip({ text }: { text: string }) {
@@ -42,28 +44,64 @@ function PitchHelpTooltip({ text }: { text: string }) {
   );
 }
 
-function PitchLab({ project, updateProject, goToStep }: PitchLabProps) {
-  const [prompt, setPrompt] = useState(() => buildPitchPrompt(project));
+function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: PitchLabProps) {
+  const currentIdeaSignature = buildPitchIdeaSignature(project);
+  const hasFreshPitches = project.pitches.length > 0
+    && (!project.pitchIdeaSignature || project.pitchIdeaSignature === currentIdeaSignature);
+  const [prompt, setPrompt] = useState(() => hasFreshPitches && project.pitchPrompt ? project.pitchPrompt : buildPitchPrompt(project));
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showResults, setShowResults] = useState(false);
+  const [showResults, setShowResults] = useState(hasFreshPitches);
   const [copied, setCopied] = useState(false);
   const [editingPitch, setEditingPitch] = useState<PitchOption | null>(null);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  useEffect(() => {
+    const nextSignature = buildPitchIdeaSignature(project);
+    const nextHasFreshPitches = project.pitches.length > 0
+      && (!project.pitchIdeaSignature || project.pitchIdeaSignature === nextSignature);
+    setPrompt(nextHasFreshPitches && project.pitchPrompt ? project.pitchPrompt : buildPitchPrompt(project));
+    setShowResults(nextHasFreshPitches);
+    setEditingPitch(null);
+    setAiError('');
+  }, [project.id]);
+
+  useEffect(() => {
+    if (!project.pitches.length || project.pitchIdeaSignature) return;
+    updateProject((current) => ({
+      ...current,
+      pitchPrompt: current.pitchPrompt || buildPitchPrompt(current),
+      pitchIdeaSignature: buildPitchIdeaSignature(current),
+    }));
+  }, [project.id, project.pitches.length, project.pitchIdeaSignature]);
+
+  function showAiError(error: unknown, fallback: string) {
+    const message = error instanceof Error ? error.message : fallback;
+    setAiError(message);
+    onNotice(message);
+    window.requestAnimationFrame(() => document.getElementById('pitch-ai-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }
 
   async function generatePlots() {
     setIsGenerating(true);
+    setAiError('');
     setEditingPitch(null);
     try {
-      const { options, job } = await generatePitchOptions(project, prompt);
+      const { options, job } = await generatePitchOptions(project, prompt, aiSettings);
       updateProject(
         (current) => ({
           ...current,
           selectedPitchId: undefined,
           pitches: options,
+          pitchPrompt: prompt,
+          pitchIdeaSignature: buildPitchIdeaSignature(current),
           jobs: [...current.jobs, job],
         }),
         'ประมวลผล Prompt และสร้างโครงเรื่อง 3 แนวทางแล้ว',
       );
       setShowResults(true);
+    } catch (error) {
+      showAiError(error, 'สร้างโครงเรื่องไม่สำเร็จ');
     } finally {
       setIsGenerating(false);
     }
@@ -92,23 +130,30 @@ function PitchLab({ project, updateProject, goToStep }: PitchLabProps) {
 
   async function confirmPitch() {
     if (!editingPitch) return;
-
-    const { bible, chapters, job } = await buildStoryBibleFromPitch(project, editingPitch);
-    updateProject(
-      (current) => ({
-        ...current,
-        selectedPitchId: editingPitch.id,
-        pitches: current.pitches.map((item) =>
-          item.id === editingPitch.id ? { ...editingPitch, selected: true } : { ...item, selected: false },
-        ),
-        bible,
-        chapters,
-        currentChapterId: chapters[0]?.id ?? current.currentChapterId,
-        jobs: [...current.jobs, job],
-      }),
-      'บันทึกโครงเรื่องและเปิด Story Bible สำหรับแก้ไขแล้ว',
-    );
-    goToStep('bible');
+    setIsConfirming(true);
+    setAiError('');
+    try {
+      const { bible, chapters, job } = await buildStoryBibleFromPitch(project, editingPitch, aiSettings);
+      updateProject(
+        (current) => ({
+          ...current,
+          selectedPitchId: editingPitch.id,
+          pitches: current.pitches.map((item) =>
+            item.id === editingPitch.id ? { ...editingPitch, selected: true } : { ...item, selected: false },
+          ),
+          bible,
+          chapters,
+          currentChapterId: chapters[0]?.id ?? current.currentChapterId,
+          jobs: [...current.jobs, job],
+        }),
+        'บันทึกโครงเรื่องและเปิด Story Bible สำหรับแก้ไขแล้ว',
+      );
+      goToStep('bible');
+    } catch (error) {
+      showAiError(error, 'สร้าง Story Bible ไม่สำเร็จ');
+    } finally {
+      setIsConfirming(false);
+    }
   }
 
   return (
@@ -123,12 +168,13 @@ function PitchLab({ project, updateProject, goToStep }: PitchLabProps) {
               <p>ปรับ Prompt สร้าง 3 แนวทาง แล้วแก้ไขโครงที่เลือกก่อนนำไปพัฒนาต่อ</p>
             </div>
           </div>
-          <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('idea')}>
+          {/* <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('idea')}>
             <ArrowLeft size={17} /> กลับไป Step 1: ตั้งค่าเรื่อง
-          </button>
+          </button> */}
         </header>
 
         <div className="pitch-step-body">
+          {aiError && <div id="pitch-ai-error" className="pitch-ai-error" role="alert"><CircleAlert size={18} /><span>{aiError}</span></div>}
           <section className="pitch-form-section" aria-labelledby="pitch-prompt-title">
             <div className="pitch-section-heading">
               <div>
@@ -143,7 +189,16 @@ function PitchLab({ project, updateProject, goToStep }: PitchLabProps) {
             <textarea
               className="pitch-prompt-input"
               value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
+              onChange={(event) => {
+                const value = event.target.value;
+                setPrompt(value);
+                setShowResults(Boolean(
+                  project.pitches.length
+                  && project.pitchIdeaSignature === currentIdeaSignature
+                  && value === project.pitchPrompt,
+                ));
+                setEditingPitch(null);
+              }}
               rows={10}
               aria-label="Prompt สำหรับสร้างโครงเรื่อง"
             />
@@ -235,9 +290,8 @@ function PitchLab({ project, updateProject, goToStep }: PitchLabProps) {
 
                   <div className="pitch-editor-actions">
                     <button type="button" className="secondary-button" onClick={() => setEditingPitch(null)}>ยกเลิก</button>
-                    <button type="button" className="accent-button pitch-confirm-button" onClick={confirmPitch} disabled={!editingPitch.title.trim() || !editingPitch.hook.trim()}>
-                      บันทึกและไป Step 3
-                      <ArrowRight size={17} />
+                    <button type="button" className="accent-button pitch-confirm-button" onClick={confirmPitch} disabled={!editingPitch.title.trim() || !editingPitch.hook.trim() || isConfirming}>
+                      {isConfirming ? <><LoaderCircle className="spin" size={17} /> กำลังสร้าง Story Bible...</> : <>บันทึกและไป Step 3 <ArrowRight size={17} /></>}
                     </button>
                   </div>
                 </section>

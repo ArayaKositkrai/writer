@@ -101,6 +101,8 @@ export interface NovelProject {
   idea: IdeaSettings;
   pitches: PitchOption[];
   selectedPitchId?: string;
+  pitchPrompt?: string;
+  pitchIdeaSignature?: string;
   bible: StoryBible;
   chapters: ChapterPlan[];
   reviews: Record<string, ReviewItem[]>;

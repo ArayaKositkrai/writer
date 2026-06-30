@@ -85,9 +85,9 @@ function ChapterBoard({ project, updateProject, goToStep }: ChapterBoardProps) {
             </div>
           </div>
           <div className="board-header-actions">
-            <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('bible')}>
+            {/* <button type="button" className="secondary-button flow-back-button" onClick={() => goToStep('bible')}>
               <ArrowLeft size={17} /> กลับไป Step 3: โครงทั้งเรื่อง
-            </button>
+            </button> */}
             <div className="board-count-badge">
               <strong>{project.chapters.length}</strong>
               <span>ตอน</span>

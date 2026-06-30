@@ -8,13 +8,17 @@ import {
   FileUp,
   Library,
   LogOut,
+  Eye,
+  EyeOff,
+  KeyRound,
   Plus,
   Search,
   Sparkles,
   Trash2
 } from 'lucide-react';
-import { ChangeEvent, useRef, useState } from 'react';
+import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { novelPresets } from '../data/presets';
+import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '../services/credentials';
 import { AiSettings, NovelProject } from '../types';
 
 interface SidebarProps {
@@ -32,11 +36,23 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-const modelOptions = [
-  { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-  { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-  { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash' },
-];
+const providerModelOptions: Record<AiSettings['provider'], Array<{ value: string; label: string }>> = {
+  gemini: [
+    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (แนะนำ)' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (คุณภาพสูง)' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (ประหยัด)' },
+  ],
+  openai: [
+    { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (แนะนำ)' },
+    { value: 'gpt-5.5', label: 'GPT-5.5 (คุณภาพสูง)' },
+    { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (ประหยัด)' },
+  ],
+};
+
+const defaultModel: Record<AiSettings['provider'], string> = {
+  gemini: 'gemini-3.5-flash',
+  openai: 'gpt-5.4-mini',
+};
 
 const operationModeDescriptions = {
   mock: 'Mock AI: ทดลองใช้งานด้วยข้อมูลจำลอง ไม่เรียก API จริง',
@@ -63,6 +79,13 @@ function Sidebar({
   const [searchQuery, setSearchQuery] = useState('');
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
+  const [apiKeyDraft, setApiKeyDraft] = useState(() => getApiKey(aiSettings.provider));
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    setApiKeyDraft(getApiKey(aiSettings.provider));
+    setShowApiKey(false);
+  }, [aiSettings.provider]);
 
   // กรองโปรเจกต์ตามคำค้นหา
   const filteredProjects = projects.filter(p => 
@@ -73,6 +96,26 @@ function Sidebar({
     const file = event.target.files?.[0];
     if (file) onImportProject(file);
     event.target.value = '';
+  }
+
+  function changeProvider(provider: AiSettings['provider']) {
+    onAiSettingsChange({
+      ...aiSettings,
+      provider,
+      model: defaultModel[provider],
+      apiKeyConfigured: hasApiKey(provider),
+    });
+  }
+
+  function saveCurrentApiKey() {
+    setApiKey(aiSettings.provider, apiKeyDraft);
+    onAiSettingsChange({ ...aiSettings, apiKeyConfigured: Boolean(apiKeyDraft.trim()) });
+  }
+
+  function removeCurrentApiKey() {
+    clearApiKey(aiSettings.provider);
+    setApiKeyDraft('');
+    onAiSettingsChange({ ...aiSettings, apiKeyConfigured: false });
   }
 
   return (
@@ -211,10 +254,44 @@ function Sidebar({
                   <p className="mode-explain">{operationModeDescriptions[aiSettings.operationMode]}</p>
                 </div>
                 <div className="input-group">
-                  <label>โมเดล</label>
-                  <select value={aiSettings.model} onChange={(e) => onAiSettingsChange({ ...aiSettings, provider: 'gemini', model: e.target.value })}>
-                    {modelOptions.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  <label>Provider</label>
+                  <select value={aiSettings.provider} onChange={(e) => changeProvider(e.target.value as AiSettings['provider'])}>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
                   </select>
+                </div>
+                <div className="input-group">
+                  <label>โมเดล</label>
+                  <select value={aiSettings.model} onChange={(e) => onAiSettingsChange({ ...aiSettings, model: e.target.value })}>
+                    {providerModelOptions[aiSettings.provider].map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                </div>
+                <div className="input-group api-key-group">
+                  <label>{aiSettings.provider === 'openai' ? 'OpenAI' : 'Gemini'} API key</label>
+                  <div className="api-key-input-row">
+                    <div className="api-key-input">
+                      <KeyRound size={13} />
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        value={apiKeyDraft}
+                        onChange={(event) => setApiKeyDraft(event.target.value)}
+                        placeholder={aiSettings.provider === 'openai' ? 'sk-...' : 'AIza...'}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button type="button" onClick={() => setShowApiKey((value) => !value)} aria-label={showApiKey ? 'ซ่อน API key' : 'แสดง API key'}>
+                        {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="api-key-actions">
+                    <span className={aiSettings.apiKeyConfigured ? 'key-status configured' : 'key-status'}>
+                      {aiSettings.apiKeyConfigured ? 'บันทึกในแท็บนี้แล้ว' : 'ยังไม่ได้บันทึก key'}
+                    </span>
+                    {aiSettings.apiKeyConfigured && <button type="button" onClick={removeCurrentApiKey}>ลบ</button>}
+                    <button type="button" className="save-key-button" onClick={saveCurrentApiKey} disabled={!apiKeyDraft.trim()}>บันทึก</button>
+                  </div>
+                  <p className="api-key-warning">Key เก็บใน sessionStorage และจะหายเมื่อปิดแท็บ เหมาะสำหรับใช้งานส่วนตัวเท่านั้น</p>
                 </div>
               </div>
             )}
@@ -362,7 +439,7 @@ function Sidebar({
           padding: 12px 0;
         }
 
-        .vsb-section { margin-bottom: 8px; display: flex; flex-direction: column; }
+        .vsb-section { margin-bottom: 8px; display: flex; flex-direction: column; flex-shrink: 0; }
         .is-collapsed .vsb-section { margin-bottom: 4px; }
         
         /* Section Header & Icons */
@@ -461,6 +538,22 @@ function Sidebar({
           border: 1px solid var(--line); background: #fff; outline: none;
         }
         .input-group select:focus { border-color: var(--primary); }
+        .api-key-group { border-top: 1px solid var(--line); padding-top: 8px; }
+        .api-key-input { position: relative; display: flex; align-items: center; }
+        .api-key-input > svg { position: absolute; left: 9px; z-index: 1; color: var(--muted); }
+        .api-key-input input { width: 100%; padding: 7px 34px 7px 29px; font-family: monospace; font-size: 0.75rem; }
+        .api-key-input > button {
+          position: absolute; right: 4px; width: 26px; height: 26px; display: grid; place-items: center;
+          border: 0; border-radius: 5px; background: transparent; color: var(--muted);
+        }
+        .api-key-input > button:hover { background: var(--surface-soft); color: var(--text); }
+        .api-key-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+        .api-key-actions > button { border: 0; background: transparent; color: var(--danger); padding: 3px 5px; font-size: 0.7rem; font-weight: 700; }
+        .api-key-actions .save-key-button { border-radius: 5px; background: var(--primary); color: #fff; padding: 5px 8px; }
+        .api-key-actions .save-key-button:disabled { opacity: 0.45; }
+        .key-status { margin-right: auto; color: var(--muted); font-size: 0.67rem; }
+        .key-status.configured { color: var(--ok); }
+        .api-key-warning { margin: 0; border-radius: 6px; background: var(--warning-soft); color: var(--warning); padding: 7px; font-size: 0.66rem; line-height: 1.4; }
 
         /* Presets */
         .preset-list { gap: 6px; }
@@ -509,6 +602,28 @@ function Sidebar({
           white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100;
         }
         .tooltip-right:hover::after { opacity: 1; }
+
+        @media (max-width: 920px) {
+          .vibrant-sidebar,
+          .vibrant-sidebar.is-collapsed {
+            position: fixed;
+            inset: 0 auto 0 0;
+            width: min(86vw, 300px);
+            transform: translateX(0);
+            transition: transform 0.25s ease;
+            box-shadow: 12px 0 32px rgba(15, 23, 42, 0.18);
+          }
+          .vibrant-sidebar.is-collapsed {
+            transform: translateX(calc(-100% - 20px));
+          }
+          .vibrant-sidebar.is-collapsed .vsb-header,
+          .vibrant-sidebar.is-collapsed .vsb-main-content,
+          .vibrant-sidebar.is-collapsed .vsb-footer,
+          .vibrant-sidebar.is-collapsed .vsb-collapsed-nav {
+            visibility: hidden;
+          }
+          .edge-collapse-btn { top: 20px; right: -13px; }
+        }
       `}</style>
     </>
   );

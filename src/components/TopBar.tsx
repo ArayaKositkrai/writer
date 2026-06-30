@@ -1,3 +1,4 @@
+import { Menu, PanelLeftClose } from 'lucide-react';
 import { WorkflowStep, NovelProject, AiSettings } from '../types';
 import { loginPath, workflowRoutes } from '../routes';
 
@@ -34,6 +35,9 @@ function TopBar({
     <>
       <header className="top-bar">
         <div className="top-left">
+          <button type="button" className="sidebar-toggle-button" onClick={onToggleSidebar} aria-label={sidebarCollapsed ? 'เปิดแถบด้านข้าง' : 'ปิดแถบด้านข้าง'}>
+            {sidebarCollapsed ? <Menu size={20} /> : <PanelLeftClose size={20} />}
+          </button>
           <div className="top-title">
             <span className="eyebrow">Novel Studio</span>
             <h1>{project.title}</h1>

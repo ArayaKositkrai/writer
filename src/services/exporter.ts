@@ -16,6 +16,12 @@ function safeFilename(value: string) {
   return value.replace(/[<>:"/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, ' ').trim() || 'untitled';
 }
 
+function chapterContent(chapter: ChapterPlan) {
+  return chapter.status === 'main'
+    ? chapter.mainText || chapter.draft
+    : chapter.draft || chapter.mainText;
+}
+
 export function downloadProjectJson(project: NovelProject) {
   download(`${safeFilename(project.title || 'novel-project')}.json`, JSON.stringify(project, null, 2), 'application/json;charset=utf-8');
 }
@@ -34,7 +40,7 @@ export function chapterToMarkdown(project: NovelProject, chapter: ChapterPlan) {
 
 ### ต้นฉบับ
 
-${chapter.mainText || chapter.draft || 'ยังไม่มีต้นฉบับสำหรับตอนนี้'}
+${chapterContent(chapter) || 'ยังไม่มีต้นฉบับสำหรับตอนนี้'}
 `;
 }
 
@@ -49,7 +55,7 @@ export function downloadChapterJson(project: NovelProject, chapter: ChapterPlan)
 }
 
 export function projectToMarkdown(project: NovelProject) {
-  const mainChapters = project.chapters.filter((chapter) => chapter.mainText || chapter.draft);
+  const mainChapters = project.chapters.filter((chapter) => chapterContent(chapter));
 
   return `# ${project.title}
 
@@ -92,7 +98,7 @@ ${chapter.summary}
 
 ## ต้นฉบับ
 ${mainChapters
-  .map((chapter) => `### ตอนที่ ${chapter.number}: ${chapter.title}\n\n${chapter.mainText || chapter.draft}`)
+  .map((chapter) => `### ตอนที่ ${chapter.number}: ${chapter.title}\n\n${chapterContent(chapter)}`)
   .join('\n\n')}
 `;
 }

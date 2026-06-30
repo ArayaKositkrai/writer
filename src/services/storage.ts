@@ -1,5 +1,6 @@
 import { AiSettings, ProjectStore, NovelProject } from '../types';
 import { createChapter, createDefaultProject } from '../data/defaultProject';
+import { hasApiKey } from './credentials';
 
 const STORAGE_KEY = 'novel_studio_project_store_v1';
 const AI_SETTINGS_KEY = 'novel_studio_ai_settings_v1';
@@ -7,7 +8,7 @@ const AI_SETTINGS_KEY = 'novel_studio_ai_settings_v1';
 export const defaultAiSettings: AiSettings = {
   operationMode: 'mock',
   provider: 'gemini',
-  model: 'gemini-1.5-flash',
+  model: 'gemini-3.5-flash',
   apiKeyConfigured: false,
 };
 
@@ -37,9 +38,15 @@ export function saveStore(store: ProjectStore) {
 
 export function loadAiSettings(): AiSettings {
   try {
-    return { ...defaultAiSettings, ...JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || '{}') };
+    const loaded = { ...defaultAiSettings, ...JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || '{}') } as AiSettings;
+    const deprecatedGeminiModel = loaded.provider === 'gemini' && /^(gemini-1\.|gemini-2\.0)/.test(loaded.model);
+    return {
+      ...loaded,
+      model: deprecatedGeminiModel ? defaultAiSettings.model : loaded.model,
+      apiKeyConfigured: hasApiKey(loaded.provider),
+    };
   } catch {
-    return defaultAiSettings;
+    return { ...defaultAiSettings, apiKeyConfigured: hasApiKey(defaultAiSettings.provider) };
   }
 }
 

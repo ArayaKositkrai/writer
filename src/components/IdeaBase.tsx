@@ -63,6 +63,8 @@ const expectedOutputsList = [
   { id: '8', label: '8. ตอนจบที่ค้างคา/ประทับใจ' },
 ];
 
+const defaultExpectedOutputs = ['1', '2', '3', '4', '6', '8'];
+
 // Component เล็กๆ สำหรับแสดง Tooltip
 function HelpTooltip({ text }: { text: string }) {
   return (
@@ -78,7 +80,7 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
   const genreRef = useRef<HTMLDivElement>(null);
 
   const selectedGenres: string[] = idea.genres || [];
-  const expectedOutputs: string[] = idea.expectedOutputs || ['1', '2', '3', '4', '6', '8']; 
+  const expectedOutputs: string[] = idea.expectedOutputs || defaultExpectedOutputs;
   const currentChapterOption = idea.chapterCountStr
     || chapterOptions.find((option) => Number.parseInt(option, 10) === idea.chapterCount)
     || `${idea.chapterCount || 1} ตอน (ค่าปัจจุบัน)`;
@@ -126,7 +128,7 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
 
   function toggleExpectedOutput(id: string) {
     updateProject((current: any) => {
-      const currentOutputs = current.idea.expectedOutputs || [];
+      const currentOutputs = current.idea.expectedOutputs || defaultExpectedOutputs;
       const hasOutput = currentOutputs.includes(id);
       return {
         ...current,

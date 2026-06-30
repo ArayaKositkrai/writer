@@ -14,6 +14,7 @@ import {
 } from './services/storage';
 import { AiSettings, NovelProject, WorkflowStep } from './types';
 import Sidebar from './components/Sidebar';
+import ConfirmDialog from './components/ConfirmDialog';
 import TopBar from './components/TopBar';
 import WorkflowRouteView from './pages/WorkflowRouteView';
 import LoginPage from './pages/LoginPage';
@@ -26,7 +27,8 @@ function App() {
   const [aiSettings, setAiSettings] = useState(() => loadAiSettings());
   const [path, setPath] = useState(() => normalizePath(window.location.pathname));
   const [message, setMessage] = useState('พร้อมใช้งานในโหมด Mock AI');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 920);
+  const [projectPendingDelete, setProjectPendingDelete] = useState<NovelProject | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem(AUTH_KEY) === 'true');
 
   const project = useMemo(
@@ -45,6 +47,13 @@ function App() {
   useEffect(() => {
     saveAiSettings(aiSettings);
   }, [aiSettings]);
+
+  useEffect(() => {
+    const mobileQuery = window.matchMedia('(max-width: 920px)');
+    const handleBreakpointChange = (event: MediaQueryListEvent) => setSidebarCollapsed(event.matches);
+    mobileQuery.addEventListener('change', handleBreakpointChange);
+    return () => mobileQuery.removeEventListener('change', handleBreakpointChange);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated && window.location.pathname !== loginPath) {
@@ -119,9 +128,13 @@ function App() {
   function removeProject(projectId: string) {
     const target = store.projects.find((item) => item.id === projectId);
     if (!target) return;
-    const confirmed = window.confirm(`ลบเรื่อง "${target.title}" ออกจากคลังนิยายหรือไม่?`);
-    if (!confirmed) return;
-    setStore((current) => deleteProject(current, projectId));
+    setProjectPendingDelete(target);
+  }
+
+  function confirmRemoveProject() {
+    if (!projectPendingDelete) return;
+    setStore((current) => deleteProject(current, projectPendingDelete.id));
+    setProjectPendingDelete(null);
     setMessage('ลบเรื่องออกจากคลังนิยายแล้ว');
   }
 
@@ -187,6 +200,8 @@ function App() {
         onLogout={logout}
       />
 
+      {!sidebarCollapsed && <button type="button" className="mobile-sidebar-scrim" onClick={() => setSidebarCollapsed(true)} aria-label="ปิดเมนู" />}
+
       <main className="workspace">
         <TopBar
           step={step}
@@ -205,8 +220,10 @@ function App() {
               step={step}
               project={project}
               chapter={currentChapter}
+              aiSettings={aiSettings}
               updateProject={updateProject}
               goToStep={goToStep}
+              onNotice={setMessage}
             />
           </div>
 
@@ -276,6 +293,14 @@ function App() {
           </aside>
         </section>
       </main>
+
+      <ConfirmDialog
+        open={Boolean(projectPendingDelete)}
+        title="ลบเรื่องนี้ออกจากคลัง?"
+        description={projectPendingDelete ? `เรื่อง “${projectPendingDelete.title}” และข้อมูลทุกตอนจะถูกลบ การดำเนินการนี้ย้อนกลับไม่ได้` : ''}
+        onCancel={() => setProjectPendingDelete(null)}
+        onConfirm={confirmRemoveProject}
+      />
     </div>
   );
 }
