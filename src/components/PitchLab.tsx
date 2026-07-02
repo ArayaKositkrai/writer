@@ -2,6 +2,8 @@ import { ArrowLeft, ArrowRight, Check, CircleAlert, Copy, LoaderCircle, Pencil, 
 import { useEffect, useState } from 'react';
 import { buildPitchIdeaSignature, buildPitchPrompt, buildStoryBibleFromPitch, generatePitchOptions } from '../services/aiService';
 import { AiSettings, NovelProject, PitchOption, WorkflowStep } from '../types';
+import { buildChapters } from '../data/defaultProject';
+import ConfirmDialog from './ConfirmDialog';
 
 interface PitchLabProps {
   project: NovelProject;
@@ -55,6 +57,8 @@ function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: Pi
   const [editingPitch, setEditingPitch] = useState<PitchOption | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [pitchPendingSwitch, setPitchPendingSwitch] = useState<PitchOption | null>(null);
+  const [approvedSwitchPitchId, setApprovedSwitchPitchId] = useState<string | null>(null);
 
   useEffect(() => {
     const nextSignature = buildPitchIdeaSignature(project);
@@ -124,16 +128,39 @@ function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: Pi
     });
   }
 
+  function requestPitchEditor(pitch: PitchOption) {
+    if (project.selectedPitchId && project.selectedPitchId !== pitch.id && approvedSwitchPitchId !== pitch.id) {
+      setPitchPendingSwitch(pitch);
+      return;
+    }
+    openPitchEditor(pitch);
+  }
+
+  function confirmPitchSwitch() {
+    if (!pitchPendingSwitch) return;
+    setApprovedSwitchPitchId(pitchPendingSwitch.id);
+    openPitchEditor(pitchPendingSwitch);
+    setPitchPendingSwitch(null);
+  }
+
   function updateEditingPitch(field: keyof Pick<PitchOption, 'title' | 'hook' | 'style' | 'risk'>, value: string) {
     setEditingPitch((current) => (current ? { ...current, [field]: value } : current));
   }
 
   async function confirmPitch() {
     if (!editingPitch) return;
+    const isSwitchingPitch = Boolean(project.selectedPitchId && project.selectedPitchId !== editingPitch.id);
+    if (isSwitchingPitch && approvedSwitchPitchId !== editingPitch.id) {
+      setPitchPendingSwitch(editingPitch);
+      return;
+    }
     setIsConfirming(true);
     setAiError('');
     try {
-      const { bible, chapters, job } = await buildStoryBibleFromPitch(project, editingPitch, aiSettings);
+      const projectForGeneration = isSwitchingPitch
+        ? { ...project, chapters: buildChapters(project.idea.chapterCount), reviews: {} }
+        : project;
+      const { bible, chapters, job } = await buildStoryBibleFromPitch(projectForGeneration, editingPitch, aiSettings);
       updateProject(
         (current) => ({
           ...current,
@@ -143,11 +170,13 @@ function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: Pi
           ),
           bible,
           chapters,
+          reviews: isSwitchingPitch ? {} : current.reviews,
           currentChapterId: chapters[0]?.id ?? current.currentChapterId,
           jobs: [...current.jobs, job],
         }),
         'บันทึกโครงเรื่องและเปิด Story Bible สำหรับแก้ไขแล้ว',
       );
+      setApprovedSwitchPitchId(null);
       goToStep('bible');
     } catch (error) {
       showAiError(error, 'สร้าง Story Bible ไม่สำเร็จ');
@@ -184,6 +213,14 @@ function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: Pi
                 </div>
                 <p>ตรวจและแก้คำสั่งให้ตรงกับทิศทางที่ต้องการก่อนสร้างโครงเรื่อง</p>
               </div>
+            </div>
+
+            <div className="pitch-plan-source" aria-label="ข้อมูลจาก Step 1">
+              <strong>ข้อมูลที่ดึงจาก Step 1</strong>
+              <span>{project.idea.chapterCount} ตอน</span>
+              <span>{project.idea.wordsPerChapter}</span>
+              <span>{project.idea.targetReaders}</span>
+              <span>{project.idea.tone}</span>
             </div>
 
             <textarea
@@ -231,10 +268,13 @@ function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: Pi
               </div>
 
               <div className="pitch-grid">
-                {project.pitches.map((pitch, index) => (
-                  <article key={pitch.id} className={editingPitch?.id === pitch.id ? 'pitch-card editing' : 'pitch-card'}>
+                {project.pitches.map((pitch, index) => {
+                  const isSelectedPitch = project.selectedPitchId === pitch.id;
+                  return (
+                  <article key={pitch.id} className={`pitch-card${editingPitch?.id === pitch.id ? ' editing' : ''}${isSelectedPitch ? ' selected' : ''}`}>
                     <div className="pitch-meta">
                       <span>ตัวเลือก {index + 1}</span>
+                      {isSelectedPitch && <span className="pitch-selected-badge"><Check size={14} /> พล็อตที่ใช้อยู่</span>}
                       {editingPitch?.id === pitch.id && <Pencil size={16} />}
                     </div>
                     <h3>{pitch.title}</h3>
@@ -249,12 +289,13 @@ function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: Pi
                         <dd>{pitch.risk}</dd>
                       </div>
                     </dl>
-                    <button className="secondary-button pitch-select-button" onClick={() => openPitchEditor(pitch)}>
+                    <button className="secondary-button pitch-select-button" onClick={() => requestPitchEditor(pitch)}>
                       <Pencil size={16} />
-                      เลือกและแก้ไขโครงนี้
+                      {isSelectedPitch ? 'แก้ไขพล็อตที่ใช้อยู่' : 'เลือกและแก้ไขโครงนี้'}
                     </button>
                   </article>
-                ))}
+                  );
+                })}
               </div>
 
               {editingPitch && (
@@ -300,6 +341,14 @@ function PitchLab({ project, aiSettings, updateProject, goToStep, onNotice }: Pi
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(pitchPendingSwitch)}
+        title="เปลี่ยนโครงเรื่องที่เลือก?"
+        description={pitchPendingSwitch ? `คุณกำลังจะเปลี่ยนไปใช้ “${pitchPendingSwitch.title}” หากยืนยันและบันทึกพล็อตใหม่ Story Bible, โครงตอน, ต้นฉบับ และผลตรวจที่เคยสร้างจะถูกลบทั้งหมด` : ''}
+        confirmLabel="ยืนยันเปลี่ยนพล็อต"
+        onCancel={() => setPitchPendingSwitch(null)}
+        onConfirm={confirmPitchSwitch}
+      />
     </div>
   );
 }

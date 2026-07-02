@@ -12,7 +12,7 @@ import {
   saveAiSettings,
   saveStore,
 } from './services/storage';
-import { AiSettings, NovelProject, WorkflowStep } from './types';
+import { AiSettings, GenerationJob, NovelProject, WorkflowStep } from './types';
 import Sidebar from './components/Sidebar';
 import ConfirmDialog from './components/ConfirmDialog';
 import TopBar from './components/TopBar';
@@ -21,6 +21,23 @@ import LoginPage from './pages/LoginPage';
 import { loginPath, normalizePath, routeForStep, stepForPath } from './routes';
 
 const AUTH_KEY = 'novel_studio_mock_auth_v1';
+
+const jobTypeLabel: Record<GenerationJob['type'], string> = {
+  pitch: 'Step 2 · สร้าง 3 โครงเรื่อง',
+  bible: 'Step 3–4 · Story Bible/โครงตอน',
+  chapter: 'Step 5 · เขียนต้นฉบับ',
+  review: 'Step 5 · ตรวจคุณภาพ',
+  rewrite: 'Step 5 · แก้ไข/รีไรต์',
+};
+
+function formatGenerationDuration(durationMs?: number) {
+  if (durationMs === undefined) return 'ไม่มีข้อมูลเวลา';
+  if (durationMs < 1_000) return `${durationMs} ms`;
+  if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(1)} วินาที`;
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.round((durationMs % 60_000) / 1_000);
+  return `${minutes} นาที ${seconds} วินาที`;
+}
 
 function App() {
   const [store, setStore] = useState(() => loadStore());
@@ -279,16 +296,17 @@ function App() {
             <div className="context-card">
               <div className="card-title">
                 <FileText size={16} />
-                <span>AI Log</span>
+                <span>AI Log ({project.jobs.length})</span>
               </div>
-              <ul className="job-list">
-                {project.jobs.slice(-5).reverse().map((job) => (
+              {project.jobs.length ? <ul className="job-list">
+                {project.jobs.slice(-10).reverse().map((job) => (
                   <li key={job.id}>
-                    <strong>{job.type}</strong>
+                    <strong>{jobTypeLabel[job.type]}</strong>
+                    <span className="job-model">{job.provider ?? 'legacy'} / {job.model ?? 'ไม่ระบุโมเดล'} · {formatGenerationDuration(job.durationMs)} · {new Date(job.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
                     <span>{job.resultPreview}</span>
                   </li>
                 ))}
-              </ul>
+              </ul> : <p className="muted">ยังไม่มีการเรียก AI</p>}
             </div>
           </aside>
         </section>

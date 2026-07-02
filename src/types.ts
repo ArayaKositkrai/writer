@@ -14,7 +14,7 @@ export type OperationMode = 'mock' | 'manual' | 'api';
 
 export interface AiSettings {
   operationMode: OperationMode;
-  provider: 'gemini' | 'openai';
+  provider: 'gemini' | 'openai' | 'ollama';
   model: string;
   apiKeyConfigured: boolean;
 }
@@ -91,6 +91,9 @@ export interface GenerationJob {
   prompt: string;
   resultPreview: string;
   createdAt: string;
+  provider?: AiSettings['provider'] | 'mock' | 'manual';
+  model?: string;
+  durationMs?: number;
 }
 
 export interface NovelProject {

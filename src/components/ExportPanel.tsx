@@ -5,9 +5,12 @@ import {
 import { useMemo, useState } from 'react';
 import {
   chapterToMarkdown,
+  downloadChapterDocx,
   downloadChapterJson,
   downloadChapterMarkdown,
+  downloadProjectDocx,
   downloadProjectJson,
+  downloadProjectMarkdown,
 } from '../services/exporter';
 import { summarizeCanonUpdate } from '../services/aiService';
 import { NovelProject, WorkflowStep, ChapterStatus } from '../types';
@@ -32,6 +35,8 @@ function ExportPanel({ project, updateProject, goToStep }: ExportPanelProps) {
   
   const [selectedChapterId, setSelectedChapterId] = useState(firstReadyChapter?.id ?? '');
   const [copied, setCopied] = useState(false);
+  const [exportingDocx, setExportingDocx] = useState<string | null>(null);
+  const [exportError, setExportError] = useState('');
   
   // State สำหรับ Pagination ของสารบัญ
   const [currentPage, setCurrentPage] = useState(1);
@@ -61,6 +66,18 @@ function ExportPanel({ project, updateProject, goToStep }: ExportPanelProps) {
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       setCopied(false);
+    }
+  }
+
+  async function createDocx(key: string, task: () => Promise<void>) {
+    setExportingDocx(key);
+    setExportError('');
+    try {
+      await task();
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'สร้างไฟล์ DOCX ไม่สำเร็จ');
+    } finally {
+      setExportingDocx(null);
     }
   }
 
@@ -112,9 +129,20 @@ function ExportPanel({ project, updateProject, goToStep }: ExportPanelProps) {
             <span className="divider">•</span> 
             <strong>{mainChapters}</strong> ตอนบันทึกเป็นตอนหลักแล้ว
           </div>
-          <button type="button" className="btn-outline" onClick={() => downloadProjectJson(project)}>
-            <FileJson size={16} /> สำรองโปรเจกต์ทั้งเรื่อง (.json)
-          </button>
+          <div className="project-export-area">
+            {exportError && <span className="export-error" role="alert">{exportError}</span>}
+            <div className="project-export-actions">
+              <button type="button" className="btn-outline" disabled={!draftedChapters || exportingDocx !== null} onClick={() => void createDocx('project', () => downloadProjectDocx(project))}>
+                <FileText size={16} /> {exportingDocx === 'project' ? 'กำลังสร้าง...' : 'ต้นฉบับ .docx'}
+              </button>
+              <button type="button" className="btn-outline" disabled={!draftedChapters} onClick={() => downloadProjectMarkdown(project)}>
+                <Download size={16} /> ทั้งเล่ม .md
+              </button>
+              <button type="button" className="btn-outline" onClick={() => downloadProjectJson(project)}>
+                <FileJson size={16} /> สำรอง .json
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="export-body-split">
@@ -181,6 +209,14 @@ function ExportPanel({ project, updateProject, goToStep }: ExportPanelProps) {
                     <div className="title-inline-row">
                       <h3>{selectedChapter.title}</h3>
                       <div className="inline-export-actions">
+                        <button
+                          className="borderless-text-btn"
+                          disabled={!(selectedChapter.mainText || selectedChapter.draft).trim() || exportingDocx !== null}
+                          onClick={() => void createDocx(selectedChapter.id, () => downloadChapterDocx(project, selectedChapter))}
+                          title="ดาวน์โหลด Word DOCX"
+                        >
+                          <FileText size={14} /> <span>{exportingDocx === selectedChapter.id ? '...' : 'DOCX'}</span>
+                        </button>
                         <button 
                           className="borderless-text-btn"
                           disabled={!(selectedChapter.mainText || selectedChapter.draft).trim()} 
@@ -293,10 +329,15 @@ function ExportPanel({ project, updateProject, goToStep }: ExportPanelProps) {
         .export-header h2 { margin: 0; font-size: 1.15rem; font-weight: 700; color: #1f2937; }
         .export-header p { margin: 2px 0 0; font-size: 0.85rem; color: #6b7280; }
 
-        .export-stats-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+        .export-stats-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
         .stats-info { font-size: 0.85rem; color: #4b5563; }
         .stats-info strong { color: #111827; }
         .divider { margin: 0 8px; color: #d1d5db; }
+        .project-export-area { display: grid; justify-items: end; gap: 5px; }
+        .project-export-actions { display: flex; align-items: center; gap: 6px; }
+        .project-export-actions button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .project-export-actions button:disabled { cursor: not-allowed; opacity: 0.5; }
+        .export-error { max-width: 520px; color: #b91c1c; font-size: 0.75rem; text-align: right; }
 
         .export-body-split { flex: 1; display: flex; overflow: hidden; }
 

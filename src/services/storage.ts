@@ -43,7 +43,7 @@ export function loadAiSettings(): AiSettings {
     return {
       ...loaded,
       model: deprecatedGeminiModel ? defaultAiSettings.model : loaded.model,
-      apiKeyConfigured: hasApiKey(loaded.provider),
+      apiKeyConfigured: loaded.provider === 'ollama' || hasApiKey(loaded.provider),
     };
   } catch {
     return { ...defaultAiSettings, apiKeyConfigured: hasApiKey(defaultAiSettings.provider) };

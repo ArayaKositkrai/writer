@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AiSettings, ChapterPlan, GenerationJob, NovelProject, PitchOption, ReviewItem, StoryBible } from '../types';
 import { createChapter, createId } from '../data/defaultProject';
 import { generateStructured, generateText } from './aiProvider';
+import { countWords, parseWordTarget, richTextToPlainText } from './richText';
 
 const now = () => new Date().toISOString();
 
@@ -55,7 +56,55 @@ function useLiveAi(settings?: AiSettings) {
 
 const thaiNovelSystemPrompt = 'คุณเป็นนักเขียนและบรรณาธิการนิยายภาษาไทยมืออาชีพ รักษาความต่อเนื่องของข้อมูล ห้ามกล่าวถึงคำสั่งหรือกระบวนการของ AI และตอบเป็นภาษาไทยเท่านั้น';
 
-function addJob(type: GenerationJob['type'], prompt: string, resultPreview: string): GenerationJob {
+async function generateChapterAtTargetLength(settings: AiSettings, prompt: string, wordTarget: string) {
+  const target = parseWordTarget(wordTarget);
+  const initialTokenLimit = Math.min(12_000, Math.max(2_048, Math.ceil(target.target * 3.2)));
+  let text = await generateText(settings, thaiNovelSystemPrompt, prompt, {
+    maxOutputTokens: initialTokenLimit,
+    temperature: 0.85,
+  });
+
+  if (countWords(text) > target.maximum) {
+    text = await generateText(
+      settings,
+      thaiNovelSystemPrompt,
+      `ปรับต้นฉบับนิยายนี้ให้เหลือ ${target.minimum}-${target.maximum} คำ โดยรักษาเหตุการณ์หลัก อารมณ์ ความต่อเนื่อง และ cliffhanger ไว้ ตัดเฉพาะคำซ้ำและรายละเอียดที่ไม่จำเป็น
+
+ต้นฉบับ:
+${text}
+
+ส่งเฉพาะต้นฉบับที่ปรับแล้ว`,
+      { maxOutputTokens: initialTokenLimit, temperature: 0.7 },
+    );
+  }
+
+  for (let pass = 0; pass < 4 && countWords(text) < target.minimum; pass += 1) {
+    const currentWords = countWords(text);
+    const missingWords = target.minimum - currentWords;
+    const continuation = await generateText(
+      settings,
+      thaiNovelSystemPrompt,
+      `เขียนต้นฉบับนิยายต่อจากประโยคสุดท้ายของต้นฉบับด้านล่าง โดยไม่ทวนเนื้อหาเดิม ไม่ใส่หัวข้อ และไม่อธิบายกระบวนการ
+
+ปัจจุบันมี ${currentWords} คำ ยังขาดอย่างน้อย ${missingWords} คำ เขียนเพิ่มประมาณ ${Math.ceil(missingWords * 1.1)} คำ และพาเรื่องไปถึงจุดจบตอนตาม brief
+
+ต้นฉบับปัจจุบัน:
+${text}
+
+ส่งเฉพาะเนื้อหาที่เขียนต่อเพิ่มเท่านั้น`,
+      {
+        maxOutputTokens: Math.min(8_000, Math.max(1_024, Math.ceil(missingWords * 3.4))),
+        temperature: 0.8,
+      },
+    );
+    text = `${text.trim()}\n\n${continuation.trim()}`;
+  }
+
+  return text;
+}
+
+function addJob(type: GenerationJob['type'], prompt: string, resultPreview: string, settings: AiSettings | undefined, startedAt: number): GenerationJob {
+  const isLive = useLiveAi(settings) && settings;
   return {
     id: createId('job'),
     type,
@@ -63,6 +112,9 @@ function addJob(type: GenerationJob['type'], prompt: string, resultPreview: stri
     prompt,
     resultPreview,
     createdAt: now(),
+    provider: isLive ? settings.provider : settings?.operationMode === 'manual' ? 'manual' : 'mock',
+    model: isLive ? settings.model : settings?.operationMode === 'manual' ? 'Manual Prompt' : 'Mock AI',
+    durationMs: Math.max(0, Date.now() - startedAt),
   };
 }
 
@@ -70,6 +122,11 @@ export function buildPitchPrompt(project: NovelProject) {
   const idea = project.idea as NovelProject['idea'] & Record<string, unknown>;
   const genres = idea.genres.join(', ') || 'ยังไม่ระบุ';
   const seed = idea.seedIdea || 'ยังไม่ระบุ';
+  const aiModeLabel = idea.aiMode === 'high_auto'
+    ? 'อัตโนมัติสูง — โครงต้องชัดเจนและนำไปเขียนต่อได้ทันที'
+    : idea.aiMode === 'manual_first'
+      ? 'คนเขียนคุมเอง — เปิดช่องให้แก้โครงและตัดสินใจเอง'
+      : 'มีผู้ช่วย — เสนอทางเลือกและให้คนเขียนยืนยันทุกขั้น';
 
   return [
     'คุณคือนักพัฒนาโครงเรื่องนิยายมืออาชีพ',
@@ -80,12 +137,14 @@ export function buildPitchPrompt(project: NovelProject) {
     `ไอเดียตั้งต้น: ${seed}`,
     `กลุ่มผู้อ่าน: ${idea.targetReaders || 'ยังไม่ระบุ'}`,
     `จำนวนตอน: ${idea.chapterCount || 'ยังไม่ระบุ'}`,
+    `จำนวนคำต่อตอน: ${idea.wordsPerChapter || 'ยังไม่ระบุ'}`,
     `โทนเรื่อง: ${idea.tone || 'ยังไม่ระบุ'}`,
-    `พล็อตยอดนิยม: ${String(idea.template || 'ยังไม่ระบุ')}`,
+    `โหมดการทำงานกับ AI: ${aiModeLabel} [${idea.aiMode}]`,
     `ข้อกำหนดเพิ่มเติม: ${idea.authorNotes || 'ไม่มี'}`,
     '',
     'แต่ละโครงเรื่องต้องมี: ชื่อโครงเรื่อง, hook, รูปแบบการเล่า และความเสี่ยงที่ผู้เขียนควรระวัง',
     'ทั้ง 3 โครงต้องมีแกนความขัดแย้งและทิศทางตอนจบต่างกันอย่างชัดเจน',
+    `ออกแบบสเกลเรื่องให้รองรับ ${idea.chapterCount || 'จำนวนที่กำหนด'} ตอน ตอนละ ${idea.wordsPerChapter || 'ตามความเหมาะสม'} โดยไม่ยืดเรื่องหรือมีตอนน้ำ`,
     'ตอบเป็นภาษาไทย กระชับ และพร้อมนำไปพัฒนาต่อ',
   ].join('\n');
 }
@@ -95,6 +154,7 @@ export function buildPitchIdeaSignature(project: NovelProject) {
 }
 
 export async function generatePitchOptions(project: NovelProject, customPrompt?: string, settings?: AiSettings) {
+  const startedAt = Date.now();
   const genres = project.idea.genres.join(' + ') || 'ดราม่า';
   const seed = project.idea.seedIdea || 'ตัวเอกต้องเผชิญความจริงที่เปลี่ยนชีวิต';
   const prompt = customPrompt?.trim() || buildPitchPrompt(project);
@@ -108,7 +168,7 @@ export async function generatePitchOptions(project: NovelProject, customPrompt?:
       'pitch_options',
     );
     const options: PitchOption[] = result.options.map((item) => ({ ...item, id: createId('pitch') }));
-    return { options, job: addJob('pitch', prompt, `สร้างโครงเรื่องจริง ${options.length} แนวทางด้วย ${settings.provider}/${settings.model}`) };
+    return { options, job: addJob('pitch', prompt, `สร้างโครงเรื่องจริง ${options.length} แนวทาง`, settings, startedAt) };
   }
 
   const options: PitchOption[] = [
@@ -135,10 +195,11 @@ export async function generatePitchOptions(project: NovelProject, customPrompt?:
     },
   ];
 
-  return { options, job: addJob('pitch', prompt, `สร้างโครงเรื่อง ${options.length} แนวทาง`) };
+  return { options, job: addJob('pitch', prompt, `สร้างโครงเรื่อง ${options.length} แนวทาง`, settings, startedAt) };
 }
 
 export async function buildStoryBibleFromPitch(project: NovelProject, pitch: PitchOption, settings?: AiSettings) {
+  const startedAt = Date.now();
   const prompt = `Build story bible from pitch: ${pitch.title}`;
   const targetChapterCount = Math.max(1, project.idea.chapterCount || project.chapters.length);
 
@@ -150,15 +211,18 @@ export async function buildStoryBibleFromPitch(project: NovelProject, pitch: Pit
 
 ชื่อเรื่อง: ${project.title}
 แนวเรื่อง: ${project.idea.genres.join(', ')}
+ไอเดียตั้งต้น: ${project.idea.seedIdea}
 กลุ่มผู้อ่าน: ${project.idea.targetReaders}
 โทน: ${project.idea.tone}
+จำนวนตอน: ${targetChapterCount}
+จำนวนคำต่อตอน: ${project.idea.wordsPerChapter}
 ข้อกำหนดผู้เขียน: ${project.idea.authorNotes}
 พล็อตที่เลือก: ${pitch.title}
 Hook: ${pitch.hook}
 แนวทางการเล่า: ${pitch.style}
 ข้อควรระวัง: ${pitch.risk}
 
-วาง premise, กฎโลก, style guide, ตัวละครหลัก, timeline และปมลึกลับให้เพียงพอสำหรับนิยาย ${targetChapterCount} ตอน`,
+วาง premise, กฎโลก, style guide, ตัวละครหลัก, timeline และปมลึกลับให้เพียงพอสำหรับนิยาย ${targetChapterCount} ตอน ตอนละ ${project.idea.wordsPerChapter}`,
       z.object({ bible: bibleSchema }),
       'story_bible',
     );
@@ -175,6 +239,10 @@ Hook: ${pitch.hook}
 
 ชื่อเรื่อง: ${project.title}
 พล็อต: ${pitch.title} — ${pitch.hook}
+กลุ่มผู้อ่าน: ${project.idea.targetReaders}
+โทน: ${project.idea.tone}
+เป้าหมายความยาวต่อตอน: ${project.idea.wordsPerChapter}
+ข้อกำหนดผู้เขียน: ${project.idea.authorNotes}
 Story Bible: ${JSON.stringify(bibleResult.bible)}
 
 ต้องคืนครบ ${batchCount} ตอน เลขตอนเรียง ${start} ถึง ${end} ทุกตอนมี title, summary, goal, conflict, outcome และ cliffhanger ที่ต่อเนื่องกันแต่ไม่ซ้ำกัน`,
@@ -198,7 +266,7 @@ Story Bible: ${JSON.stringify(bibleResult.bible)}
       characters: bibleResult.bible.characters.map((character) => ({ ...character, id: createId('char') })),
       canonMemory: ['Story bible ถูกสร้างด้วย Live API แต่ยังไม่มีตอนหลักที่ผ่านการบันทึก'],
     };
-    return { bible, chapters, job: addJob('bible', prompt, `สร้าง Story Bible และ ${chapters.length} ตอนด้วย ${settings.provider}/${settings.model}`) };
+    return { bible, chapters, job: addJob('bible', prompt, `สร้าง Story Bible และ ${chapters.length} ตอน`, settings, startedAt) };
   }
 
   const bible: StoryBible = {
@@ -262,16 +330,16 @@ Story Bible: ${JSON.stringify(bibleResult.bible)}
     updatedAt: now(),
   }));
 
-  return { bible, chapters, job: addJob('bible', prompt, bible.premise) };
+  return { bible, chapters, job: addJob('bible', prompt, bible.premise, settings, startedAt) };
 }
 
 export async function draftChapter(project: NovelProject, chapter: ChapterPlan, settings?: AiSettings) {
+  const startedAt = Date.now();
   const prompt = `Draft chapter ${chapter.number}: ${chapter.title}`;
   const memory = project.bible.canonMemory.slice(-4).join('\n- ');
   if (useLiveAi(settings) && settings) {
-    const text = await generateText(
+    const text = await generateChapterAtTargetLength(
       settings,
-      thaiNovelSystemPrompt,
       `เขียนต้นฉบับนิยายตอนที่ ${chapter.number}: ${chapter.title}
 
 เรื่องย่อ: ${chapter.summary}
@@ -279,7 +347,7 @@ export async function draftChapter(project: NovelProject, chapter: ChapterPlan, 
 ความขัดแย้ง: ${chapter.conflict}
 ผลลัพธ์: ${chapter.outcome}
 Cliffhanger: ${chapter.cliffhanger}
-จำนวนคำเป้าหมาย: ${project.idea.wordsPerChapter}
+จำนวนคำเป้าหมาย: ${project.idea.wordsPerChapter} ต้องเขียนให้ถึงค่าต่ำสุดก่อนจบตอน
 สไตล์: ${project.bible.styleGuide}
 กฎโลก: ${project.bible.worldRules}
 ตัวละคร: ${project.bible.characters.map((item) => `${item.name} (${item.role}): เป้าหมาย ${item.goal}; ความขัดแย้ง ${item.conflict}; arc ${item.arc}`).join('\n')}
@@ -287,8 +355,9 @@ Canon ล่าสุด:
 - ${memory || 'ยังไม่มี canon จากตอนก่อนหน้า'}
 
 ส่งเฉพาะเนื้อหานิยายฉบับเต็ม ไม่ต้องมีคำอธิบายก่อนหรือหลัง`,
+      project.idea.wordsPerChapter,
     );
-    return { text, job: addJob('chapter', prompt, `เขียนตอนจริงด้วย ${settings.provider}/${settings.model}: ${text.slice(0, 100)}`) };
+    return { text, job: addJob('chapter', prompt, `เขียนตอนที่ ${chapter.number} · ${countWords(text)} คำ`, settings, startedAt) };
   }
 
   const text = `# ตอนที่ ${chapter.number}: ${chapter.title}
@@ -314,16 +383,16 @@ ${chapter.cliffhanger}
 บริบท canon ล่าสุดที่ต้องคุม:
 - ${memory || 'ยังไม่มี canon จากตอนก่อนหน้า'}`;
 
-  return { text, job: addJob('chapter', prompt, text.slice(0, 120)) };
+  return { text, job: addJob('chapter', prompt, text.slice(0, 120), settings, startedAt) };
 }
 
 export async function rewriteChapter(project: NovelProject, chapter: ChapterPlan, settings?: AiSettings) {
+  const startedAt = Date.now();
   const prompt = `Rewrite chapter ${chapter.number} for style and pacing`;
-  const source = chapter.draft || chapter.mainText;
+  const source = richTextToPlainText(chapter.draft || chapter.mainText);
   if (useLiveAi(settings) && settings) {
-    const text = await generateText(
+    const text = await generateChapterAtTargetLength(
       settings,
-      thaiNovelSystemPrompt,
       `รีไรต์ต้นฉบับต่อไปนี้ให้สำนวนลื่น จังหวะดี ลดคำซ้ำ แต่รักษาเหตุการณ์ ข้อมูล canon และน้ำเสียงตาม Style Guide
 
 Style Guide: ${project.bible.styleGuide}
@@ -332,8 +401,9 @@ Style Guide: ${project.bible.styleGuide}
 ${source}
 
 ส่งเฉพาะต้นฉบับฉบับปรับปรุง`,
+      project.idea.wordsPerChapter,
     );
-    return { text, job: addJob('rewrite', prompt, `รีไรต์ตอนด้วย ${settings.provider}/${settings.model}`) };
+    return { text, job: addJob('rewrite', prompt, `รีไรต์ตอนที่ ${chapter.number}`, settings, startedAt) };
   }
 
   const text = `${source}
@@ -341,16 +411,16 @@ ${source}
 ---
 ฉบับปรับสำนวน: เพิ่มน้ำหนักอารมณ์ในฉากตัดสินใจ ลดการอธิบายซ้ำ และทำให้ประโยคท้ายตอนมีแรงดึงมากขึ้น`;
 
-  return { text, job: addJob('rewrite', prompt, text.slice(-160)) };
+  return { text, job: addJob('rewrite', prompt, text.slice(-160), settings, startedAt) };
 }
 
 export async function reviseChapterFromReviews(project: NovelProject, chapter: ChapterPlan, reviews: ReviewItem[], settings?: AiSettings) {
-  const source = chapter.draft || chapter.mainText;
+  const startedAt = Date.now();
+  const source = richTextToPlainText(chapter.draft || chapter.mainText);
   const prompt = `Revise chapter ${chapter.number} using selected review items: ${reviews.map((item) => item.area).join(', ')}`;
   if (useLiveAi(settings) && settings) {
-    const text = await generateText(
+    const text = await generateChapterAtTargetLength(
       settings,
-      thaiNovelSystemPrompt,
       `แก้ไขต้นฉบับตามรายการตรวจที่เลือก โดยรักษาเหตุการณ์หลักและข้อมูล canon เดิม
 
 Style Guide: ${project.bible.styleGuide}
@@ -361,8 +431,9 @@ ${reviews.map((item, index) => `${index + 1}. [${item.area}/${item.severity}] ${
 ${source}
 
 ส่งเฉพาะต้นฉบับฉบับแก้ไขสมบูรณ์`,
+      project.idea.wordsPerChapter,
     );
-    return { text, job: addJob('rewrite', prompt, `แก้ไข ${reviews.length} ประเด็นด้วย ${settings.provider}/${settings.model}`) };
+    return { text, job: addJob('rewrite', prompt, `แก้ไข ${reviews.length} ประเด็น ตอนที่ ${chapter.number}`, settings, startedAt) };
   }
 
   const revisions = reviews.map((item) => {
@@ -375,14 +446,15 @@ ${source}
   });
   const text = `${source.trim()}\n\n${revisions.join('\n\n')}`;
 
-  return { text, job: addJob('rewrite', prompt, `แก้ไข ${reviews.length} ประเด็นจาก Quality Review`) };
+  return { text, job: addJob('rewrite', prompt, `แก้ไข ${reviews.length} ประเด็นจาก Quality Review`, settings, startedAt) };
 }
 
 export async function reviewChapter(project: NovelProject, chapter: ChapterPlan, settings?: AiSettings) {
+  const startedAt = Date.now();
   const prompt = `Review chapter ${chapter.number} across continuity, logic, character, style, pacing, hook`;
   const hasDraft = Boolean(chapter.draft || chapter.mainText);
   if (useLiveAi(settings) && settings) {
-    const source = chapter.draft || chapter.mainText;
+    const source = richTextToPlainText(chapter.draft || chapter.mainText);
     const result = await generateStructured(
       settings,
       'คุณเป็นบรรณาธิการนิยายภาษาไทย ตรวจอย่างตรงไปตรงมาและเสนอวิธีแก้ที่ลงมือทำได้ ตอบเป็นภาษาไทยเท่านั้น',
@@ -402,7 +474,7 @@ ${source}
       'chapter_quality_review',
     );
     const items: ReviewItem[] = result.items.map((item) => ({ ...item, id: createId('review'), resolved: false }));
-    return { items, job: addJob('review', prompt, `ตรวจพบ ${items.length} ประเด็นด้วย ${settings.provider}/${settings.model}`) };
+    return { items, job: addJob('review', prompt, `ตรวจพบ ${items.length} ประเด็น ตอนที่ ${chapter.number}`, settings, startedAt) };
   }
 
   const items: ReviewItem[] = [
@@ -437,7 +509,7 @@ ${source}
     },
   ];
 
-  return { items, job: addJob('review', prompt, `${items.length} review items`) };
+  return { items, job: addJob('review', prompt, `${items.length} review items`, settings, startedAt) };
 }
 
 export function summarizeCanonUpdate(chapter: ChapterPlan) {

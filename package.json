@@ -11,6 +11,7 @@
   "dependencies": {
     "@google/genai": "^2.10.0",
     "@vitejs/plugin-react": "^4.6.0",
+    "docx": "^9.7.1",
     "lucide-react": "^0.468.0",
     "openai": "^6.45.0",
     "react": "^19.1.0",

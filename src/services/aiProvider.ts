@@ -3,6 +3,17 @@ import { AiSettings } from '../types';
 import { getApiKey } from './credentials';
 
 const REQUEST_TIMEOUT_MS = 90_000;
+const OLLAMA_REQUEST_TIMEOUT_MS = 10 * 60_000;
+const OLLAMA_CHAT_URL = 'http://localhost:11434/api/chat';
+
+export interface GenerateTextOptions {
+  maxOutputTokens?: number;
+  temperature?: number;
+}
+
+function outputTokenLimit(options?: GenerateTextOptions) {
+  return Math.min(16_000, Math.max(512, Math.round(options?.maxOutputTokens ?? 16_000)));
+}
 
 export class AiProviderError extends Error {
   constructor(message: string, readonly code: 'missing_key' | 'auth' | 'rate_limit' | 'timeout' | 'invalid_response' | 'request_failed') {
@@ -11,16 +22,17 @@ export class AiProviderError extends Error {
   }
 }
 
-function controllerWithTimeout() {
+function controllerWithTimeout(timeoutMs = REQUEST_TIMEOUT_MS) {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   return { controller, clear: () => window.clearTimeout(timeout) };
 }
 
 function requireKey(settings: AiSettings) {
   const key = getApiKey(settings.provider);
   if (!key) {
-    throw new AiProviderError(`ยังไม่ได้กรอก API key สำหรับ ${settings.provider === 'openai' ? 'OpenAI' : 'Gemini'}`, 'missing_key');
+    const providerName = settings.provider === 'openai' ? 'OpenAI' : 'Google AI';
+    throw new AiProviderError(`ยังไม่ได้กรอก API key สำหรับ ${providerName}`, 'missing_key');
   }
   return key;
 }
@@ -58,7 +70,91 @@ function geminiJsonSchema(schema: z.ZodType) {
   return jsonSchema;
 }
 
-async function openAiText(settings: AiSettings, system: string, prompt: string) {
+function parseJsonResponse(raw: string) {
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  return JSON.parse(cleaned) as unknown;
+}
+
+interface OllamaChatResponse {
+  message?: { content?: string };
+  error?: string;
+}
+
+async function ollamaChat(settings: AiSettings, system: string, prompt: string, format?: Record<string, unknown>, generation: GenerateTextOptions = {}) {
+  const { controller, clear } = controllerWithTimeout(OLLAMA_REQUEST_TIMEOUT_MS);
+  const maxOutputTokens = outputTokenLimit(generation);
+  try {
+    const response = await fetch(OLLAMA_CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: settings.model,
+        stream: false,
+        think: false,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: prompt },
+        ],
+        ...(format ? { format } : {}),
+        options: {
+          num_predict: maxOutputTokens,
+          num_ctx: Math.min(32_768, Math.max(8_192, maxOutputTokens + Math.ceil(prompt.length / 2))),
+          temperature: format ? 0 : generation.temperature ?? 0.8,
+          top_p: 0.95,
+          top_k: 64,
+        },
+      }),
+    });
+
+    const data = await response.json().catch(() => ({})) as OllamaChatResponse;
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new AiProviderError(`ไม่พบโมเดล ${settings.model} ใน Ollama กรุณารัน: ollama pull ${settings.model}`, 'request_failed');
+      }
+      const error = Object.assign(new Error(data.error || `Ollama HTTP ${response.status}`), { status: response.status });
+      throw error;
+    }
+
+    const text = data.message?.content?.trim();
+    if (!text) throw new AiProviderError('Ollama ไม่ส่งเนื้อหากลับมา', 'invalid_response');
+    return text;
+  } catch (error) {
+    const candidate = error as { name?: string };
+    if ((error instanceof DOMException && error.name === 'AbortError') || candidate?.name === 'AbortError') {
+      throw new AiProviderError('Ollama ใช้เวลาตอบนานเกิน 10 นาที กรุณาลองใหม่หรือเลือกโมเดลที่เล็กลง', 'timeout');
+    }
+    if (error instanceof TypeError) {
+      throw new AiProviderError('เชื่อมต่อ Ollama ไม่ได้ กรุณาเปิด Ollama ที่ localhost:11434 และตรวจสอบ CORS', 'request_failed');
+    }
+    throw normalizeProviderError(error);
+  } finally {
+    clear();
+  }
+}
+
+async function ollamaText(settings: AiSettings, system: string, prompt: string, options?: GenerateTextOptions) {
+  return ollamaChat(settings, system, prompt, undefined, options);
+}
+
+async function ollamaStructured<T>(settings: AiSettings, system: string, prompt: string, schema: z.ZodType<T>) {
+  const format = geminiJsonSchema(schema);
+  const structuredPrompt = `${prompt}\n\nตอบเป็น JSON เท่านั้นตาม schema นี้:\n${JSON.stringify(format)}`;
+  const raw = await ollamaChat(settings, system, structuredPrompt, format);
+  try {
+    const parsed = schema.safeParse(parseJsonResponse(raw));
+    if (!parsed.success) throw new AiProviderError('ผลลัพธ์จาก Ollama ไม่ตรงกับรูปแบบข้อมูลที่ระบบต้องการ', 'invalid_response');
+    return parsed.data;
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new AiProviderError('Ollama ส่ง JSON ที่อ่านไม่ได้ กรุณาลองใหม่', 'invalid_response');
+    throw error;
+  }
+}
+
+async function openAiText(settings: AiSettings, system: string, prompt: string, options?: GenerateTextOptions) {
   const { default: OpenAI } = await import('openai');
   const client = new OpenAI({ apiKey: requireKey(settings), dangerouslyAllowBrowser: true });
   const { controller, clear } = controllerWithTimeout();
@@ -67,7 +163,7 @@ async function openAiText(settings: AiSettings, system: string, prompt: string) 
       model: settings.model,
       instructions: system,
       input: prompt,
-      max_output_tokens: 16_000,
+      max_output_tokens: outputTokenLimit(options),
     }, { signal: controller.signal });
     const text = response.output_text?.trim();
     if (!text) throw new AiProviderError('AI ไม่ส่งเนื้อหากลับมา', 'invalid_response');
@@ -103,7 +199,7 @@ async function openAiStructured<T>(settings: AiSettings, system: string, prompt:
   }
 }
 
-async function geminiText(settings: AiSettings, system: string, prompt: string) {
+async function geminiText(settings: AiSettings, system: string, prompt: string, options?: GenerateTextOptions) {
   const { GoogleGenAI } = await import('@google/genai');
   const client = new GoogleGenAI({ apiKey: requireKey(settings) });
   const { controller, clear } = controllerWithTimeout();
@@ -111,7 +207,12 @@ async function geminiText(settings: AiSettings, system: string, prompt: string) 
     const response = await client.models.generateContent({
       model: settings.model,
       contents: prompt,
-      config: { systemInstruction: system, maxOutputTokens: 16_000, abortSignal: controller.signal },
+      config: {
+        systemInstruction: system,
+        maxOutputTokens: outputTokenLimit(options),
+        temperature: options?.temperature,
+        abortSignal: controller.signal,
+      },
     });
     const text = response.text?.trim();
     if (!text) throw new AiProviderError('AI ไม่ส่งเนื้อหากลับมา', 'invalid_response');
@@ -141,7 +242,7 @@ async function geminiStructured<T>(settings: AiSettings, system: string, prompt:
     });
     const raw = response.text?.trim();
     if (!raw) throw new AiProviderError('AI ไม่ส่งข้อมูลกลับมา', 'invalid_response');
-    const parsed = schema.safeParse(JSON.parse(raw));
+    const parsed = schema.safeParse(parseJsonResponse(raw));
     if (!parsed.success) throw new AiProviderError('ผลลัพธ์จาก AI ไม่ตรงกับรูปแบบข้อมูลที่ระบบต้องการ', 'invalid_response');
     return parsed.data;
   } catch (error) {
@@ -152,14 +253,14 @@ async function geminiStructured<T>(settings: AiSettings, system: string, prompt:
   }
 }
 
-export async function generateText(settings: AiSettings, system: string, prompt: string) {
-  return settings.provider === 'openai'
-    ? openAiText(settings, system, prompt)
-    : geminiText(settings, system, prompt);
+export async function generateText(settings: AiSettings, system: string, prompt: string, options?: GenerateTextOptions) {
+  if (settings.provider === 'openai') return openAiText(settings, system, prompt, options);
+  if (settings.provider === 'ollama') return ollamaText(settings, system, prompt, options);
+  return geminiText(settings, system, prompt, options);
 }
 
 export async function generateStructured<T>(settings: AiSettings, system: string, prompt: string, schema: z.ZodType<T>, schemaName: string) {
-  return settings.provider === 'openai'
-    ? openAiStructured(settings, system, prompt, schema, schemaName)
-    : geminiStructured(settings, system, prompt, schema);
+  if (settings.provider === 'openai') return openAiStructured(settings, system, prompt, schema, schemaName);
+  if (settings.provider === 'ollama') return ollamaStructured(settings, system, prompt, schema);
+  return geminiStructured(settings, system, prompt, schema);
 }

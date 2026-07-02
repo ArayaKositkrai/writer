@@ -7,6 +7,36 @@ npm install
 npm run dev
 ```
 
+## ใช้ Gemma 4
+
+Gemma 4 ไม่มีรุ่น 24B อย่างเป็นทางการ รุ่นที่ใกล้เคียงคือ **26B A4B** (25.2B parameters, ทำงานประมาณ 4B parameters ต่อ token)
+
+- Google AI: เลือก `Google AI (Gemini/Gemma)` → `Gemma 4 26B A4B` และใส่ Google AI API key
+- Ollama local: ติดตั้ง Ollama แล้วรัน:
+
+
+```bash
+ollama pull gemma4:e4b
+ollama serve
+```
+
+จากนั้นเลือก `Ollama (Local)` → `Gemma 4 E4B` และตั้งโหมดเป็น `Live API` ระบบจะเรียก `http://localhost:11434/api/chat` โดยไม่ต้องใช้ API key
+
+`gemma4:e4b` เป็นค่าแนะนำสำหรับความเร็ว ส่วน `gemma4:26b` และ `gemma4:31b` ให้คุณภาพสูงกว่าแต่ใช้เวลาและทรัพยากรมากกว่า
+
+## การเขียนตอน
+
+- ระบบนับคำภาษาไทยด้วย word segmentation และเขียนต่ออัตโนมัติหากยังต่ำกว่าจำนวนคำขั้นต่ำ
+- ช่องแก้ไขต้นฉบับรองรับตัวหนา ตัวเอียง ย่อหน้า พารากราฟ เว้นบรรทัด และระยะบรรทัด 1.0/1.5/2.0
+
+## ดาวน์โหลดต้นฉบับ
+
+หน้า Export รองรับไฟล์ที่นำไปใช้ต่อได้จริง:
+
+- `.docx` ต้นฉบับ Word แบบ Office Open XML ทั้งรายตอนและทั้งเล่ม
+- `.md` สำหรับ Markdown editor และระบบ version control
+- `.json` สำหรับสำรองและนำโปรเจกต์กลับเข้าระบบ
+
 เปิดเมนู **ตั้งค่า AI** ใน sidebar แล้วเลือกโหมดการทำงาน:
 
 - **Mock AI** ใช้ข้อมูลจำลองและไม่เรียก API

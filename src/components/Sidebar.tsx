@@ -36,22 +36,43 @@ interface SidebarProps {
   onLogout: () => void;
 }
 
-const providerModelOptions: Record<AiSettings['provider'], Array<{ value: string; label: string }>> = {
+interface ModelOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+const providerDescriptions: Record<AiSettings['provider'], string> = {
+  gemini: 'Cloud ของ Google · เร็วและรองรับ structured output เหมาะกับทุก Step · ต้องใช้ API key',
+  openai: 'Cloud ของ OpenAI · เด่นด้านคุณภาพการเขียนและแก้ไข · ต้องใช้ API key',
+  ollama: 'รันในเครื่องผ่าน localhost · ข้อมูลไม่ออกจากเครื่อง · ความเร็วขึ้นกับ RAM/GPU',
+};
+
+const providerModelOptions: Record<AiSettings['provider'], ModelOption[]> = {
   gemini: [
-    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (แนะนำ)' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (คุณภาพสูง)' },
-    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (ประหยัด)' },
+    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (แนะนำ)', description: 'เร็วและสมดุล: Pitch, Story Bible, โครงตอน, เขียนร่าง และ Review' },
+    { value: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B A4B', description: 'งานเขียนยาวและเหตุผลซับซ้อน; ใช้เวลามากกว่า Flash' },
+    { value: 'gemma-4-31b-it', label: 'Gemma 4 31B', description: 'เน้นคุณภาพต้นฉบับและการวางเหตุผล; ช้ากว่า 26B' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'เหมาะกับ Story Bible ซับซ้อนและ Quality Review แบบละเอียด' },
+    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'ประหยัดและเร็ว เหมาะกับ Pitch/Review; คุณภาพงานยาวอาจลดลง' },
   ],
   openai: [
-    { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (แนะนำ)' },
-    { value: 'gpt-5.5', label: 'GPT-5.5 (คุณภาพสูง)' },
-    { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (ประหยัด)' },
+    { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (แนะนำ)', description: 'สมดุลคุณภาพ/ความเร็ว ใช้ได้ดีกับทุก Step' },
+    { value: 'gpt-5.5', label: 'GPT-5.5 (คุณภาพสูง)', description: 'เหมาะกับโครงเรื่องซับซ้อน ต้นฉบับคุณภาพสูง และรีไรต์' },
+    { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (ประหยัด)', description: 'เหมาะกับ Pitch หรือ Review สั้นๆ; ไม่แนะนำสำหรับต้นฉบับยาว' },
+  ],
+  ollama: [
+    { value: 'gemma4:e4b', label: 'Gemma 4 E4B (เร็วสุด / แนะนำ)', description: 'เหมาะกับ Pitch, โครงตอน และ Review; เร็วสุดสำหรับเครื่องทั่วไป' },
+    { value: 'gemma4:12b', label: 'Gemma 4 12B (สมดุล)', description: 'เหมาะกับ Story Bible และต้นฉบับ เมื่อมี RAM/GPU เพียงพอ' },
+    { value: 'gemma4:26b', label: 'Gemma 4 26B A4B (คุณภาพสูง / ช้า)', description: 'เน้นต้นฉบับและเหตุผล; ไม่เหมาะถ้าต้องการความเร็ว' },
+    { value: 'gemma4:31b', label: 'Gemma 4 31B (ช้าที่สุด)', description: 'คุณภาพสูงสุดในกลุ่ม Local; ต้องใช้ทรัพยากรสูงมาก' },
   ],
 };
 
 const defaultModel: Record<AiSettings['provider'], string> = {
   gemini: 'gemini-3.5-flash',
   openai: 'gpt-5.4-mini',
+  ollama: 'gemma4:e4b',
 };
 
 const operationModeDescriptions = {
@@ -91,6 +112,7 @@ function Sidebar({
   const filteredProjects = projects.filter(p => 
     p.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const selectedModel = providerModelOptions[aiSettings.provider].find((model) => model.value === aiSettings.model);
 
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -103,7 +125,7 @@ function Sidebar({
       ...aiSettings,
       provider,
       model: defaultModel[provider],
-      apiKeyConfigured: hasApiKey(provider),
+      apiKeyConfigured: provider === 'ollama' || hasApiKey(provider),
     });
   }
 
@@ -256,18 +278,33 @@ function Sidebar({
                 <div className="input-group">
                   <label>Provider</label>
                   <select value={aiSettings.provider} onChange={(e) => changeProvider(e.target.value as AiSettings['provider'])}>
-                    <option value="gemini">Google Gemini</option>
+                    <option value="gemini">Google AI (Gemini/Gemma)</option>
                     <option value="openai">OpenAI</option>
+                    <option value="ollama">Ollama (Local)</option>
                   </select>
+                  <p className="mode-explain">{providerDescriptions[aiSettings.provider]}</p>
                 </div>
                 <div className="input-group">
                   <label>โมเดล</label>
                   <select value={aiSettings.model} onChange={(e) => onAiSettingsChange({ ...aiSettings, model: e.target.value })}>
                     {providerModelOptions[aiSettings.provider].map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
+                  <p className="mode-explain">{selectedModel?.description ?? 'โมเดลนี้จะถูกใช้กับงาน AI ทุก Step'}</p>
+                  <div className="ai-task-usage">
+                    <strong>โมเดลนี้จะใช้กับ</strong>
+                    <span>Step 2 Pitch</span><span>Step 3 Story Bible</span><span>Step 4 โครงตอน</span><span>Step 5 เขียน/Review</span>
+                  </div>
                 </div>
-                <div className="input-group api-key-group">
-                  <label>{aiSettings.provider === 'openai' ? 'OpenAI' : 'Gemini'} API key</label>
+                {aiSettings.provider === 'ollama' ? (
+                  <div className="input-group">
+                    <label>Ollama local</label>
+                    <p className="mode-explain">รัน <code>ollama pull {aiSettings.model}</code> และเปิด Ollama ไว้ที่ <code>localhost:11434</code></p>
+                    {aiSettings.model === 'gemma4:26b' || aiSettings.model === 'gemma4:31b' ? (
+                      <p className="api-key-warning">รุ่นนี้ใช้ทรัพยากรสูง หากสร้างช้าให้เลือก Gemma 4 E4B</p>
+                    ) : null}
+                  </div>
+                ) : <div className="input-group api-key-group">
+                  <label>{aiSettings.provider === 'openai' ? 'OpenAI' : 'Google AI'} API key</label>
                   <div className="api-key-input-row">
                     <div className="api-key-input">
                       <KeyRound size={13} />
@@ -292,7 +329,7 @@ function Sidebar({
                     <button type="button" className="save-key-button" onClick={saveCurrentApiKey} disabled={!apiKeyDraft.trim()}>บันทึก</button>
                   </div>
                   <p className="api-key-warning">Key เก็บใน sessionStorage และจะหายเมื่อปิดแท็บ เหมาะสำหรับใช้งานส่วนตัวเท่านั้น</p>
-                </div>
+                </div>}
               </div>
             )}
           </section>
@@ -533,6 +570,9 @@ function Sidebar({
           font-weight: 500;
           line-height: 1.4;
         }
+        .ai-task-usage { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+        .ai-task-usage strong { width: 100%; color: var(--text-2); font-size: 0.68rem; }
+        .ai-task-usage span { border: 1px solid var(--primary-line); border-radius: 999px; background: var(--primary-soft); color: var(--primary); padding: 2px 6px; font-size: 0.62rem; }
         .input-group select {
           width: 100%; padding: 6px 8px; font-size: 0.8rem; border-radius: 6px;
           border: 1px solid var(--line); background: #fff; outline: none;

@@ -2,7 +2,9 @@ import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, C
 import { useEffect, useState } from 'react';
 import { draftChapter, reviewChapter, reviseChapterFromReviews } from '../services/aiService';
 import { downloadChapterJson, downloadChapterMarkdown } from '../services/exporter';
+import { countWords, normalizeRichText, parseWordTarget, richTextToPlainText, sanitizeRichText } from '../services/richText';
 import { AiSettings, ChapterPlan, NovelProject, ReviewItem, WorkflowStep } from '../types';
+import RichTextEditor from './RichTextEditor';
 
 interface ChapterWriterProps {
   project: NovelProject;
@@ -25,7 +27,7 @@ function getInitialTab(chapter: ChapterPlan): WriterTab {
 
 function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, onNotice }: ChapterWriterProps) {
   const text = chapter.status === 'main' ? chapter.mainText || chapter.draft : chapter.draft || chapter.mainText;
-  const hasText = Boolean(text.trim());
+  const hasText = Boolean(richTextToPlainText(text).trim());
   const [activeTab, setActiveTab] = useState<WriterTab>(() => getInitialTab(chapter));
   const [briefApproved, setBriefApproved] = useState(hasText);
   const [isDrafting, setIsDrafting] = useState(false);
@@ -34,7 +36,9 @@ function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, 
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
   const [copiedText, setCopiedText] = useState(false);
   const chapterIndex = project.chapters.findIndex((item) => item.id === chapter.id);
-  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const wordCount = countWords(text);
+  const wordTarget = parseWordTarget(project.idea.wordsPerChapter);
+  const renderedText = sanitizeRichText(normalizeRichText(text));
   const reviews = project.reviews[chapter.id] ?? [];
 
   useEffect(() => {
@@ -67,11 +71,11 @@ function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, 
         (current) => ({
           ...current,
           chapters: current.chapters.map((item) =>
-            item.id === chapter.id ? { ...item, draft, status: 'drafting', updatedAt: new Date().toISOString() } : item,
+            item.id === chapter.id ? { ...item, draft: normalizeRichText(draft), status: 'drafting', updatedAt: new Date().toISOString() } : item,
           ),
           jobs: [...current.jobs, job],
         }),
-        `AI เขียนร่างตอนที่ ${chapter.number} แล้ว`,
+        `AI เขียนร่างตอนที่ ${chapter.number} แล้ว ${countWords(draft).toLocaleString('th-TH')} คำ`,
       );
     } catch (error) {
       onNotice(error instanceof Error ? error.message : 'เขียนร่างไม่สำเร็จ');
@@ -117,7 +121,7 @@ function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, 
       updateProject((current) => ({
         ...current,
         chapters: current.chapters.map((item) =>
-          item.id === chapter.id ? { ...item, draft: revisedText, status: 'reviewing', updatedAt: new Date().toISOString() } : item,
+          item.id === chapter.id ? { ...item, draft: normalizeRichText(revisedText), status: 'reviewing', updatedAt: new Date().toISOString() } : item,
         ),
         reviews: {
           ...current.reviews,
@@ -145,7 +149,7 @@ function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, 
 
   async function copyFinalText() {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(richTextToPlainText(text));
       setCopiedText(true);
       window.setTimeout(() => setCopiedText(false), 1800);
     } catch {
@@ -220,12 +224,12 @@ function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, 
             {activeTab === 'draft' && (
               <section className="writer-editor-panel writer-draft-tab">
                 <div className="writer-editor-toolbar">
-                  <div><h3>2. เขียนร่าง</h3><span>{wordCount.toLocaleString('th-TH')} คำ · แก้ไขข้อความได้โดยตรง</span></div>
+                  <div><h3>2. เขียนร่าง</h3><span className={wordCount < wordTarget.minimum ? 'writer-word-count below-target' : 'writer-word-count target-met'}>{wordCount.toLocaleString('th-TH')} / อย่างน้อย {wordTarget.minimum.toLocaleString('th-TH')} คำ · นับคำแบบภาษาไทย</span></div>
                   <button type="button" className="accent-button writer-ai-draft-button" onClick={handleDraft} disabled={isDrafting}>
                     <WandSparkles size={17} /> {isDrafting ? 'AI กำลังเขียน...' : 'ให้ AI เขียนร่าง'}
                   </button>
                 </div>
-                <textarea className="writer-manuscript" value={text} onChange={(event) => updateChapter('draft', event.target.value)} placeholder="กด “ให้ AI เขียนร่าง” เพื่อสร้างเนื้อหาจาก Brief..." />
+                <RichTextEditor value={text} onChange={(value) => updateChapter('draft', value)} placeholder="กด “ให้ AI เขียนร่าง” เพื่อสร้างเนื้อหาจาก Brief..." />
                 <footer className="writer-editor-footer writer-draft-footer">
                   <span>ตรวจร่างให้เรียบร้อย แล้วส่งไปตรวจคุณภาพ</span>
                   <button type="button" className="accent-button" onClick={() => setActiveTab('quality')} disabled={!hasText}>
@@ -247,7 +251,7 @@ function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, 
                   <div><dt>ความขัดแย้ง</dt><dd>{chapter.conflict}</dd></div>
                   <div><dt>ผลลัพธ์และจุดทิ้งท้าย</dt><dd>{chapter.outcome}<br />{chapter.cliffhanger}</dd></div>
                 </dl>
-                <div className="writer-summary-manuscript"><h4>ต้นฉบับล่าสุด · {wordCount.toLocaleString('th-TH')} คำ</h4><div>{text || 'ยังไม่มีต้นฉบับ'}</div></div>
+                <div className="writer-summary-manuscript"><h4>ต้นฉบับล่าสุด · {wordCount.toLocaleString('th-TH')} คำ</h4><div dangerouslySetInnerHTML={{ __html: renderedText || 'ยังไม่มีต้นฉบับ' }} /></div>
                 <div className="writer-summary-actions">
                   <button type="button" className="secondary-button" onClick={() => setActiveTab('draft')}><ArrowLeft size={17} /> กลับไปดูร่าง</button>
                   <button type="button" className="accent-button" onClick={() => setActiveTab('quality')}>ไปตรวจคุณภาพ <ArrowRight size={17} /></button>
@@ -318,7 +322,7 @@ function ChapterWriter({ project, chapter, aiSettings, updateProject, goToStep, 
                     </button>
                   </div>
                 </div>
-                <article className="writer-final-manuscript">{text}</article>
+                <article className="writer-final-manuscript" dangerouslySetInnerHTML={{ __html: renderedText }} />
               </section>
             )}
           </div>
