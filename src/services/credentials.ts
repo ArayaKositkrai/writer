@@ -1,6 +1,6 @@
 // src/services/credentials.ts
 
-import { AiSettings } from '../types';
+import type { AiSettings } from '../types';
 import { appEnv } from './env';
 
 const KEY_PREFIX = 'novel_studio_api_key_session_v1';
@@ -10,6 +10,7 @@ function storageKey(provider: AiSettings['provider']) {
 }
 
 function getEnvironmentApiKey(provider: AiSettings['provider']) {
+  if (provider === 'typhoon') return appEnv.typhoonApiKey;
   if (provider === 'gemini') return appEnv.geminiApiKey;
   if (provider === 'openai') return appEnv.openAiApiKey;
   return '';
@@ -46,5 +47,5 @@ export function clearApiKey(provider: AiSettings['provider']) {
 }
 
 export function hasApiKey(provider: AiSettings['provider']) {
-  return Boolean(getApiKey(provider));
+  return provider === 'ollama' || Boolean(getApiKey(provider));
 }

@@ -3,15 +3,16 @@
 import { AiSettings, ProjectStore, NovelProject } from '../types';
 import { createChapter, createDefaultProject } from '../data/defaultProject';
 import { hasApiKey } from './credentials';
+import { appEnv } from './env';
 
 const STORAGE_KEY = 'novel_studio_project_store_v1';
 const AI_SETTINGS_KEY = 'novel_studio_ai_settings_v1';
 
 export const defaultAiSettings: AiSettings = {
-  operationMode: 'mock',
-  provider: 'gemini',
-  model: 'gemini-3.5-flash',
-  apiKeyConfigured: false,
+  operationMode: 'api',
+  provider: 'typhoon',
+  model: appEnv.typhoonModel,
+  apiKeyConfigured: hasApiKey('typhoon'),
 };
 
 export function loadStore(): ProjectStore {
@@ -40,15 +41,32 @@ export function saveStore(store: ProjectStore) {
 
 export function loadAiSettings(): AiSettings {
   try {
-    const loaded = { ...defaultAiSettings, ...JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || '{}') } as AiSettings;
+    const stored = JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || '{}') as Partial<AiSettings>;
+    const loaded = { ...defaultAiSettings, ...stored } as AiSettings;
     const deprecatedGeminiModel = loaded.provider === 'gemini' && /^(gemini-1\.|gemini-2\.0)/.test(loaded.model);
-    return {
+
+    // Typhoon model access can change by account. The .env value is the single
+    // source of truth so a stale browser setting cannot keep sending an old ID.
+    const resolvedModel = loaded.provider === 'typhoon'
+      ? appEnv.typhoonModel
+      : deprecatedGeminiModel
+        ? appEnv.geminiModel
+        : loaded.model;
+
+    const migrated: AiSettings = {
       ...loaded,
-      model: deprecatedGeminiModel ? defaultAiSettings.model : loaded.model,
+      model: resolvedModel,
       apiKeyConfigured: loaded.provider === 'ollama' || hasApiKey(loaded.provider),
     };
+
+    localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch {
-    return { ...defaultAiSettings, apiKeyConfigured: hasApiKey(defaultAiSettings.provider) };
+    return {
+      ...defaultAiSettings,
+      model: appEnv.typhoonModel,
+      apiKeyConfigured: hasApiKey(defaultAiSettings.provider),
+    };
   }
 }
 

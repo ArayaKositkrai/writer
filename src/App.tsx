@@ -1,328 +1,296 @@
 // src/App.tsx
 
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Brain, FileText, Sparkles } from 'lucide-react';
-import { buildChapters, createDefaultProject } from './data/defaultProject';
-import { novelPresets } from './data/presets';
 import {
-  addProject,
-  deleteProject,
-  importProjectFile,
+  BookOpen,
+  Download,
+  Feather,
+  LibraryBig,
+  Menu,
+  Plus,
+  Settings,
+  Sparkles,
+  WandSparkles,
+  X,
+} from 'lucide-react';
+import { createDefaultProject } from './data/defaultProject';
+import {
+  buildStoryBibleFromPitch,
+  draftChapter,
+  generatePitchOptions,
+  summarizeCanonUpdate,
+} from './services/aiService';
+import {
+  downloadProjectDocx,
+  downloadProjectJson,
+  downloadProjectMarkdown,
+} from './services/exporter';
+import {
+  defaultAiSettings,
   loadAiSettings,
-  loadStore,
-  replaceActiveProject,
   saveAiSettings,
-  saveStore,
 } from './services/storage';
-import { AiSettings, GenerationJob, NovelProject, WorkflowStep } from './types';
-import Sidebar from './components/Sidebar';
-import ConfirmDialog from './components/ConfirmDialog';
-import TopBar from './components/TopBar';
-import WorkflowRouteView from './pages/WorkflowRouteView';
-import LoginPage from './pages/LoginPage';
-import { loginPath, normalizePath, routeForStep, stepForPath } from './routes';
+import type { AiSettings, NovelProject, PitchOption } from './types';
+import { appEnv } from './services/env';
+import { buildStoryState, createChapterMemory } from './services/chapterEngine';
+import SetupView from './components/SetupView';
+import GenerateView from './components/GenerateView';
+import ReaderView from './components/ReaderView';
+import ExportView from './components/ExportView';
+import SettingsView from './components/SettingsView';
 
-const AUTH_KEY = 'novel_studio_mock_auth_v1';
+export type AppView = 'setup' | 'generate' | 'reader' | 'export' | 'settings';
 
-const jobTypeLabel: Record<GenerationJob['type'], string> = {
-  pitch: 'Step 2 · สร้าง 3 โครงเรื่อง',
-  bible: 'Step 3–4 · Story Bible/โครงตอน',
-  chapter: 'Step 5 · เขียนต้นฉบับ',
-  review: 'Step 5 · ตรวจคุณภาพ',
-  rewrite: 'Step 5 · แก้ไข/รีไรต์',
-};
+const PROJECT_KEY = 'novel-studio-v3-project';
 
-function formatGenerationDuration(durationMs?: number) {
-  if (durationMs === undefined) return 'ไม่มีข้อมูลเวลา';
-  if (durationMs < 1_000) return `${durationMs} ms`;
-  if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(1)} วินาที`;
-  const minutes = Math.floor(durationMs / 60_000);
-  const seconds = Math.round((durationMs % 60_000) / 1_000);
-  return `${minutes} นาที ${seconds} วินาที`;
+function loadProject(): NovelProject {
+  try {
+    const raw = localStorage.getItem(PROJECT_KEY);
+    return raw ? JSON.parse(raw) as NovelProject : createDefaultProject();
+  } catch {
+    return createDefaultProject();
+  }
 }
 
-function App() {
-  const [store, setStore] = useState(() => loadStore());
-  const [aiSettings, setAiSettings] = useState(() => loadAiSettings());
-  const [path, setPath] = useState(() => normalizePath(window.location.pathname));
-  const [message, setMessage] = useState('พร้อมใช้งานในโหมด Mock AI');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 920);
-  const [projectPendingDelete, setProjectPendingDelete] = useState<NovelProject | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem(AUTH_KEY) === 'true');
+const navItems = [
+  { id: 'setup' as const, label: 'เริ่มเรื่อง', icon: Feather },
+  { id: 'generate' as const, label: 'ให้ AI เขียน', icon: WandSparkles },
+  { id: 'reader' as const, label: 'อ่านต้นฉบับ', icon: BookOpen },
+  { id: 'export' as const, label: 'ดาวน์โหลด', icon: Download },
+  { id: 'settings' as const, label: 'ตั้งค่า', icon: Settings },
+];
 
-  const project = useMemo(
-    () => store.projects.find((item) => item.id === store.activeProjectId) ?? store.projects[0],
-    [store],
+export default function App() {
+  const [project, setProject] = useState<NovelProject>(() => loadProject());
+  const [settings, setSettings] = useState<AiSettings>(() => loadAiSettings());
+  const [view, setView] = useState<AppView>('setup');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('พร้อมสร้างนิยายเรื่องใหม่');
+  const [error, setError] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(PROJECT_KEY, JSON.stringify(project));
+  }, [project]);
+
+  useEffect(() => {
+    saveAiSettings(settings);
+  }, [settings]);
+
+  const completedCount = useMemo(
+    () => project.chapters.filter((chapter) => Boolean((chapter.mainText || chapter.draft).trim())).length,
+    [project.chapters],
   );
 
-  const currentChapter = project.chapters.find((chapter) => chapter.id === project.currentChapterId) ?? project.chapters[0];
-  const currentReviews = project.reviews[currentChapter.id] ?? [];
-  const step = stepForPath(path);
+  const totalChapters = project.chapters.length || project.idea.chapterCount;
+  const progress = totalChapters ? Math.round((completedCount / totalChapters) * 100) : 0;
 
-  useEffect(() => {
-    saveStore(store);
-  }, [store]);
+  async function createOutline() {
+    setBusy(true);
+    setError('');
+    try {
+      setStatus('AI กำลังตีความไอเดียและสร้างพล็อต 3 แนวทาง...');
+      const pitchResult = await generatePitchOptions(project, undefined, settings);
+      const selected = pitchResult.options[0];
+      setStatus('AI กำลังสร้างโลก ตัวละคร และโครงตอน...');
+      const bibleResult = await buildStoryBibleFromPitch(
+        { ...project, pitches: pitchResult.options, selectedPitchId: selected.id },
+        selected,
+        settings,
+      );
+      setProject((current) => ({
+        ...current,
+        pitches: pitchResult.options,
+        selectedPitchId: selected.id,
+        bible: bibleResult.bible,
+        chapters: bibleResult.chapters,
+        currentChapterId: bibleResult.chapters[0]?.id ?? current.currentChapterId,
+        jobs: [...current.jobs, pitchResult.job, bibleResult.job],
+        updatedAt: new Date().toISOString(),
+      }));
+      setStatus('โครงนิยายพร้อมแล้ว เลือกแนวทางแล้วเริ่มเขียนทั้งเล่มได้เลย');
+      setView('generate');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'สร้างโครงนิยายไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
+  }
 
-  useEffect(() => {
-    saveAiSettings(aiSettings);
-  }, [aiSettings]);
-
-  useEffect(() => {
-    const mobileQuery = window.matchMedia('(max-width: 920px)');
-    const handleBreakpointChange = (event: MediaQueryListEvent) => setSidebarCollapsed(event.matches);
-    mobileQuery.addEventListener('change', handleBreakpointChange);
-    return () => mobileQuery.removeEventListener('change', handleBreakpointChange);
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthenticated && window.location.pathname !== loginPath) {
-      window.history.replaceState({}, '', loginPath);
-      setPath(loginPath);
+  async function generateWholeBook(overwrite = false) {
+    if (!project.chapters.length) {
+      setError('กรุณาสร้างโครงนิยายก่อน');
       return;
     }
-
-    if (isAuthenticated && (window.location.pathname === '/' || window.location.pathname === loginPath)) {
-      window.history.replaceState({}, '', '/idea-base');
-      setPath('/idea-base');
-    }
-
-    function handlePopState() {
-      const nextPath = normalizePath(window.location.pathname);
-      if (!isAuthenticated && nextPath !== loginPath) {
-        window.history.replaceState({}, '', loginPath);
-        setPath(loginPath);
-        return;
-      }
-      setPath(nextPath);
-    }
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [isAuthenticated]);
-
-  function navigate(pathname: string) {
-    window.history.pushState({}, '', pathname);
-    setPath(normalizePath(pathname));
-  }
-
-  function login(mode: 'guest' | 'account') {
-    localStorage.setItem(AUTH_KEY, 'true');
-    setIsAuthenticated(true);
-    setMessage(mode === 'guest' ? 'เข้าสู่ระบบแบบ Guest แล้ว' : 'เข้าสู่ระบบ mock account แล้ว');
-    navigate('/idea-base');
-  }
-
-  function logout() {
-    localStorage.removeItem(AUTH_KEY);
-    setIsAuthenticated(false);
-    setSidebarCollapsed(false);
-    setMessage('ออกจากระบบแล้ว');
-    navigate(loginPath);
-  }
-
-  function goToStep(stepId: WorkflowStep) {
-    navigate(routeForStep(stepId).path);
-  }
-
-  function updateProject(updater: (project: NovelProject) => NovelProject, notice?: string) {
-    const updated = updater(project);
-    const stamped = { ...updated, updatedAt: new Date().toISOString() };
-    setStore((current) => replaceActiveProject(current, stamped));
-    if (notice) setMessage(notice);
-  }
-
-  function updateAiSettings(next: AiSettings) {
-    setAiSettings(next);
-    const label = next.operationMode === 'api' ? 'Live API' : next.operationMode === 'manual' ? 'Manual Prompt' : 'Mock AI';
-    setMessage(`ตั้งค่า AI เป็น ${label} / ${next.model}`);
-  }
-
-  function createProject() {
-    const nextProject = createDefaultProject();
-    setStore((current) => addProject(current, nextProject));
-    goToStep('idea');
-    setMessage('สร้างนิยายเรื่องใหม่แล้ว');
-  }
-
-  function removeProject(projectId: string) {
-    const target = store.projects.find((item) => item.id === projectId);
-    if (!target) return;
-    setProjectPendingDelete(target);
-  }
-
-  function confirmRemoveProject() {
-    if (!projectPendingDelete) return;
-    setStore((current) => deleteProject(current, projectPendingDelete.id));
-    setProjectPendingDelete(null);
-    setMessage('ลบเรื่องออกจากคลังนิยายแล้ว');
-  }
-
-  function applyPreset(presetId: string) {
-    const preset = novelPresets.find((item) => item.id === presetId);
-    if (!preset) return;
-
-    const baseProject = createDefaultProject();
-    const nextProject: NovelProject = {
-      ...baseProject,
-      title: preset.title,
-      idea: preset.idea,
-      pitches: [],
-      reviews: {},
-      jobs: [],
-      chapters: buildChapters(preset.idea.chapterCount),
-      currentChapterId: 'chapter_1',
-      bible: {
-        ...baseProject.bible,
-        premise: preset.idea.seedIdea,
-        styleGuide: `${preset.idea.tone}\n${preset.idea.authorNotes}`,
-        canonMemory: ['ใช้สูตรนิยายสำเร็จรูปแล้ว รอเลือกพล็อตและบันทึกตอนหลัก'],
-      },
-    };
-
-    setStore((current) => addProject(current, nextProject));
-    setMessage(`สร้างเรื่องใหม่จากสูตร "${preset.title}" แล้ว`);
-    goToStep('idea');
-  }
-
-  async function handleImport(file: File) {
+    setBusy(true);
+    setError('');
     try {
-      const imported = await importProjectFile(file);
-      setStore((current) => addProject(current, imported));
-      goToStep('board');
-      setMessage(`นำเข้า "${imported.title}" แล้ว`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'นำเข้าไฟล์ไม่สำเร็จ');
+      let workingProject = overwrite
+        ? {
+            ...project,
+            chapters: project.chapters.map((chapter) => ({
+              ...chapter,
+              draft: '',
+              mainText: '',
+              status: 'planned' as const,
+              canonUpdates: [],
+              scenePlan: [],
+              memory: undefined,
+            })),
+            bible: { ...project.bible, canonMemory: ['เริ่มเขียนต้นฉบับใหม่ด้วย Novel Engine V2'] },
+            storyState: undefined,
+            engineVersion: 2,
+          }
+        : project;
+      if (overwrite) setProject(workingProject);
+      for (let index = 0; index < workingProject.chapters.length; index += 1) {
+        const chapter = workingProject.chapters[index];
+        if ((chapter.mainText || chapter.draft).trim()) continue;
+        setStatus(`AI กำลังเขียนตอนที่ ${chapter.number}/${workingProject.chapters.length}: ${chapter.title}`);
+        const result = await draftChapter(workingProject, chapter, settings);
+        const chapterWithPlan = { ...chapter, scenePlan: result.scenePlan };
+        const memory = createChapterMemory(workingProject, chapterWithPlan, result.text);
+        const updatedChapter = {
+          ...chapterWithPlan,
+          draft: result.text,
+          mainText: result.text,
+          status: 'main' as const,
+          memory,
+          canonUpdates: [
+            ...summarizeCanonUpdate({ ...chapterWithPlan, mainText: result.text }),
+            ...memory.newFacts,
+            ...memory.relationshipChanges,
+          ],
+          updatedAt: new Date().toISOString(),
+        };
+        const chapters = workingProject.chapters.map((item) => item.id === chapter.id ? updatedChapter : item);
+        const canonMemory = [
+          ...workingProject.bible.canonMemory,
+          ...updatedChapter.canonUpdates,
+        ].slice(-20);
+        workingProject = {
+          ...workingProject,
+          chapters,
+          bible: { ...workingProject.bible, canonMemory },
+          storyState: buildStoryState(workingProject, updatedChapter, memory),
+          engineVersion: 2,
+          jobs: [...workingProject.jobs, result.job],
+          updatedAt: new Date().toISOString(),
+        };
+        setProject(workingProject);
+      }
+      setStatus('เขียนนิยายครบทั้งเล่มแล้ว พร้อมอ่านและดาวน์โหลด');
+      setView('reader');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'AI เขียนนิยายไม่สำเร็จ');
+    } finally {
+      setBusy(false);
     }
   }
 
-  if (!isAuthenticated) {
-    return <LoginPage onLogin={() => login('account')} onContinueAsGuest={() => login('guest')} />;
+  function choosePitch(pitch: PitchOption) {
+    setProject((current) => ({ ...current, selectedPitchId: pitch.id }));
+  }
+
+  function resetProject() {
+    if (!window.confirm('เริ่มนิยายเรื่องใหม่และล้างงานปัจจุบันใช่หรือไม่?')) return;
+    setProject(createDefaultProject());
+    setView('setup');
+    setStatus('เริ่มโปรเจกต์ใหม่แล้ว');
+  }
+
+  function navigate(nextView: AppView) {
+    setView(nextView);
+    setMenuOpen(false);
   }
 
   return (
-    <div className={sidebarCollapsed ? 'app-shell sidebar-collapsed' : 'app-shell'}>
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        projects={store.projects}
-        activeProjectId={project.id}
-        aiSettings={aiSettings}
-        onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
-        onAiSettingsChange={updateAiSettings}
-        onApplyPreset={applyPreset}
-        onSelectProject={(projectId) => {
-          setStore((current) => ({ ...current, activeProjectId: projectId }));
-          setMessage('สลับโปรเจกต์แล้ว');
-        }}
-        onNewProject={createProject}
-        onDeleteProject={removeProject}
-        onImportProject={handleImport}
-        onLogout={logout}
-      />
+    <div className="studio-shell">
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
 
-      {!sidebarCollapsed && <button type="button" className="mobile-sidebar-scrim" onClick={() => setSidebarCollapsed(true)} aria-label="ปิดเมนู" />}
+      <header className="studio-header">
+        <button className="mobile-menu" onClick={() => setMenuOpen((value) => !value)} aria-label="เปิดเมนู">
+          {menuOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+        <button className="studio-brand" onClick={() => navigate('setup')}>
+          <span className="brand-symbol"><Sparkles size={21} /></span>
+          <span><strong>Novel Studio</strong><small>AI co-author</small></span>
+        </button>
 
-      <main className="workspace">
-        <TopBar
-          step={step}
-          goToStep={goToStep}
-          project={project}
-          message={message}
-          currentPath={path}
-          aiSettings={aiSettings}
-          sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={() => setSidebarCollapsed((value) => !value)}
-          onLogout={logout}
-        />
-        <section className="workspace-body full-step-workspace-body">
-          <div className="stage-panel">
-            <WorkflowRouteView
-              step={step}
-              project={project}
-              chapter={currentChapter}
-              aiSettings={aiSettings}
-              updateProject={updateProject}
-              goToStep={goToStep}
-              onNotice={setMessage}
-            />
+        <nav className={menuOpen ? 'studio-nav open' : 'studio-nav'}>
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button key={id} className={view === id ? 'active' : ''} onClick={() => navigate(id)}>
+              <Icon size={17} /><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="header-actions">
+          <span className="model-badge">
+            {settings.operationMode === 'api'
+              ? settings.provider === 'typhoon'
+                ? appEnv.typhoonModel
+                : settings.model
+              : 'Mock AI'}
+          </span>
+          <button className="new-project-button" onClick={resetProject}><Plus size={17} />เรื่องใหม่</button>
+        </div>
+      </header>
+
+      <main className="studio-main">
+        <aside className="project-rail">
+          <div className="project-cover">
+            <div className="cover-moon" />
+            <div className="cover-castle" />
+            <span>กำลังเขียน</span>
+            <strong>{project.title || 'นิยายเรื่องใหม่'}</strong>
           </div>
+          <div className="progress-card">
+            <div><span>ความคืบหน้า</span><strong>{progress}%</strong></div>
+            <div className="progress-track"><span style={{ width: `${progress}%` }} /></div>
+            <small>{completedCount} จาก {totalChapters} ตอน</small>
+          </div>
+          <div className="quick-summary">
+            <div><LibraryBig size={17} /><span>{project.idea.genres.slice(0, 2).join(' · ') || 'ยังไม่ได้เลือกแนว'}</span></div>
+            <p>{project.idea.seedIdea || 'เริ่มจากเล่าไอเดียสั้น ๆ แล้วปล่อยให้ AI ช่วยต่อยอดทั้งเล่ม'}</p>
+          </div>
+        </aside>
 
-          <aside className="context-panel" aria-label="story context">
-            <div className="context-card identity-card">
-              <div>
-                <p className="eyebrow">Workspace</p>
-                <h2>{project.title}</h2>
-              </div>
-              <span className="mode-pill">{project.ownerMode === 'guest' ? 'Guest' : 'Account'}</span>
-            </div>
-
-            <div className="context-card">
-              <div className="card-title">
-                <Brain size={16} />
-                <span>Story Memory</span>
-              </div>
-              <ul className="compact-list">
-                {project.bible.canonMemory.slice(-5).map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="context-card">
-              <div className="card-title">
-                <BookOpen size={16} />
-                <span>ตอนปัจจุบัน</span>
-              </div>
-              <p className="chapter-context-title">
-                ตอนที่ {currentChapter.number}: {currentChapter.title}
-              </p>
-              <p className="muted">{currentChapter.summary}</p>
-              <span className={`status-badge ${currentChapter.status}`}>{currentChapter.status}</span>
-            </div>
-
-            <div className="context-card">
-              <div className="card-title">
-                <Sparkles size={16} />
-                <span>Quality Notes</span>
-              </div>
-              {currentReviews.length ? (
-                <ul className="compact-list">
-                  {currentReviews.slice(0, 4).map((item) => (
-                    <li key={item.id}>{item.title}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted">ยังไม่มีผลตรวจสำหรับตอนนี้</p>
-              )}
-            </div>
-
-            <div className="context-card">
-              <div className="card-title">
-                <FileText size={16} />
-                <span>AI Log ({project.jobs.length})</span>
-              </div>
-              {project.jobs.length ? <ul className="job-list">
-                {project.jobs.slice(-10).reverse().map((job) => (
-                  <li key={job.id}>
-                    <strong>{jobTypeLabel[job.type]}</strong>
-                    <span className="job-model">{job.provider ?? 'legacy'} / {job.model ?? 'ไม่ระบุโมเดล'} · {formatGenerationDuration(job.durationMs)} · {new Date(job.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
-                    <span>{job.resultPreview}</span>
-                  </li>
-                ))}
-              </ul> : <p className="muted">ยังไม่มีการเรียก AI</p>}
-            </div>
-          </aside>
+        <section className="workspace">
+          {view === 'setup' && (
+            <SetupView project={project} onChange={setProject} onCreateOutline={createOutline} busy={busy} />
+          )}
+          {view === 'generate' && (
+            <GenerateView
+              project={project}
+              onChoosePitch={choosePitch}
+              onGenerate={() => generateWholeBook(false)}
+              onRegenerate={() => generateWholeBook(true)}
+              busy={busy}
+              completedCount={completedCount}
+            />
+          )}
+          {view === 'reader' && <ReaderView project={project} onChange={setProject} />}
+          {view === 'export' && (
+            <ExportView
+              project={project}
+              onDocx={() => downloadProjectDocx(project)}
+              onMarkdown={() => downloadProjectMarkdown(project)}
+              onJson={() => downloadProjectJson(project)}
+            />
+          )}
+          {view === 'settings' && (
+            <SettingsView settings={settings} onChange={setSettings} defaults={defaultAiSettings} />
+          )}
         </section>
       </main>
 
-      <ConfirmDialog
-        open={Boolean(projectPendingDelete)}
-        title="ลบเรื่องนี้ออกจากคลัง?"
-        description={projectPendingDelete ? `เรื่อง “${projectPendingDelete.title}” และข้อมูลทุกตอนจะถูกลบ การดำเนินการนี้ย้อนกลับไม่ได้` : ''}
-        onCancel={() => setProjectPendingDelete(null)}
-        onConfirm={confirmRemoveProject}
-      />
+      <footer className="studio-status">
+        <span className={busy ? 'status-dot busy' : 'status-dot'} />
+        <span>{status}</span>
+        {error && <strong>{error}</strong>}
+      </footer>
     </div>
   );
 }
-
-export default App;

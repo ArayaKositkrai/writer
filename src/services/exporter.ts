@@ -119,7 +119,20 @@ function createDocx(docx: DocxModule, project: NovelProject, chapters: ChapterPl
   }
 
   chapters.forEach((chapter, index) => {
-    children.push(...chapterDocxParagraphs(docx, chapter, chapters.length > 1 && index > 0));
+    if (chapters.length > 1) {
+      children.push(
+        new docx.Paragraph({
+          text: `ตอนที่ ${chapter.number}: ${chapter.title}`,
+          heading: docx.HeadingLevel.HEADING_1,
+          pageBreakBefore: index > 0,
+          alignment: docx.AlignmentType.CENTER,
+          spacing: { after: 360 },
+        }),
+        ...bodyParagraphs(docx, chapterContent(chapter)),
+      );
+      return;
+    }
+    children.push(...chapterDocxParagraphs(docx, chapter, false));
   });
 
   return new docx.Document({

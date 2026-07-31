@@ -16,7 +16,7 @@ export type OperationMode = 'mock' | 'manual' | 'api';
 
 export interface AiSettings {
   operationMode: OperationMode;
-  provider: 'gemini' | 'openai' | 'ollama';
+  provider: 'typhoon' | 'gemini' | 'openai' | 'ollama';
   model: string;
   apiKeyConfigured: boolean;
 }
@@ -60,6 +60,41 @@ export interface StoryBible {
   canonMemory: string[];
 }
 
+export interface SceneBeat {
+  order: number;
+  purpose: string;
+  setting: string;
+  viewpoint: string;
+  conflict: string;
+  turn: string;
+}
+
+export interface ChapterMemory {
+  summary: string;
+  location: string;
+  timeMarker: string;
+  characterStates: string[];
+  relationshipChanges: string[];
+  newFacts: string[];
+  resolvedThreads: string[];
+  openThreads: string[];
+  nextHook: string;
+  openingFingerprint: string;
+}
+
+export interface StoryState {
+  currentLocation: string;
+  currentTime: string;
+  currentGoal: string;
+  currentConflict: string;
+  activeCharacters: string[];
+  relationshipState: string[];
+  inventoryAndEvidence: string[];
+  openThreads: string[];
+  resolvedThreads: string[];
+  recentConsequences: string[];
+}
+
 export interface ChapterPlan {
   id: string;
   number: number;
@@ -73,6 +108,8 @@ export interface ChapterPlan {
   draft: string;
   mainText: string;
   canonUpdates: string[];
+  scenePlan?: SceneBeat[];
+  memory?: ChapterMemory;
   updatedAt: string;
 }
 
@@ -113,6 +150,8 @@ export interface NovelProject {
   reviews: Record<string, ReviewItem[]>;
   jobs: GenerationJob[];
   currentChapterId: string;
+  storyState?: StoryState;
+  engineVersion?: number;
 }
 
 export interface ProjectStore {

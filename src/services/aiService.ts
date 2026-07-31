@@ -4,7 +4,14 @@ import { z } from 'zod';
 import { AiSettings, ChapterPlan, GenerationJob, NovelProject, PitchOption, ReviewItem, StoryBible } from '../types';
 import { createChapter, createId } from '../data/defaultProject';
 import { generateStructured, generateText } from './aiProvider';
+import { appEnv } from './env';
 import { countWords, parseWordTarget, richTextToPlainText } from './richText';
+import { buildTyphoonNovelFoundation } from './typhoonPipeline';
+import { buildChapterWritingContext } from './chapterContext';
+import { generateMockChapter } from './mockNovelWriter';
+import { openingRules } from './chapterDiversity';
+import { buildScenePlan, scenePlanPrompt } from './chapterEngine';
+import { evaluateChapterQuality, qualityRewriteInstruction } from './chapterQuality';
 
 const now = () => new Date().toISOString();
 
@@ -115,7 +122,13 @@ function addJob(type: GenerationJob['type'], prompt: string, resultPreview: stri
     resultPreview,
     createdAt: now(),
     provider: isLive ? settings.provider : settings?.operationMode === 'manual' ? 'manual' : 'mock',
-    model: isLive ? settings.model : settings?.operationMode === 'manual' ? 'Manual Prompt' : 'Mock AI',
+    model: isLive
+      ? settings.provider === 'typhoon'
+        ? appEnv.typhoonModel
+        : settings.model
+      : settings?.operationMode === 'manual'
+        ? 'Manual Prompt'
+        : 'Mock AI',
     durationMs: Math.max(0, Date.now() - startedAt),
   };
 }
@@ -206,6 +219,20 @@ export async function buildStoryBibleFromPitch(project: NovelProject, pitch: Pit
   const targetChapterCount = Math.max(1, project.idea.chapterCount || project.chapters.length);
 
   if (useLiveAi(settings) && settings) {
+    if (settings.provider === 'typhoon') {
+      const result = await buildTyphoonNovelFoundation(project, pitch, settings);
+      return {
+        ...result,
+        job: addJob(
+          'bible',
+          prompt,
+          `สร้าง Story Bible แบบหลายขั้นและโครงตอน ${result.chapters.length} ตอน`,
+          settings,
+          startedAt,
+        ),
+      };
+    }
+
     const bibleResult = await generateStructured(
       settings,
       thaiNovelSystemPrompt,
@@ -338,54 +365,98 @@ Story Bible: ${JSON.stringify(bibleResult.bible)}
 export async function draftChapter(project: NovelProject, chapter: ChapterPlan, settings?: AiSettings) {
   const startedAt = Date.now();
   const prompt = `Draft chapter ${chapter.number}: ${chapter.title}`;
-  const memory = project.bible.canonMemory.slice(-4).join('\n- ');
+  const context = buildChapterWritingContext(project, chapter);
+  const scenePlan = buildScenePlan(project, chapter);
+  chapter.scenePlan = scenePlan;
+
   if (useLiveAi(settings) && settings) {
-    const text = await generateChapterAtTargetLength(
-      settings,
-      `เขียนต้นฉบับนิยายตอนที่ ${chapter.number}: ${chapter.title}
+    const basePrompt = `เขียนต้นฉบับนิยายตอนที่ ${chapter.number}: ${chapter.title} ให้ต่อจากตอนก่อนหน้าโดยตรง
 
+ตำแหน่งในเรื่อง: ${context.phase}
+คำสั่งด้านโครงสร้าง: ${context.phaseInstruction}
 เรื่องย่อ: ${chapter.summary}
-เป้าหมาย: ${chapter.goal}
+เป้าหมายเชิงเหตุการณ์: ${chapter.goal}
 ความขัดแย้ง: ${chapter.conflict}
-ผลลัพธ์: ${chapter.outcome}
-Cliffhanger: ${chapter.cliffhanger}
-จำนวนคำเป้าหมาย: ${project.idea.wordsPerChapter} ต้องเขียนให้ถึงค่าต่ำสุดก่อนจบตอน
-สไตล์: ${project.bible.styleGuide}
-กฎโลก: ${project.bible.worldRules}
-ตัวละคร: ${project.bible.characters.map((item) => `${item.name} (${item.role}): เป้าหมาย ${item.goal}; ความขัดแย้ง ${item.conflict}; arc ${item.arc}`).join('\n')}
-Canon ล่าสุด:
-- ${memory || 'ยังไม่มี canon จากตอนก่อนหน้า'}
+ผลลัพธ์บังคับ: ${chapter.outcome}
+Cliffhanger บังคับ: ${chapter.cliffhanger}
+จำนวนคำเป้าหมาย: ${project.idea.wordsPerChapter}
 
-ส่งเฉพาะเนื้อหานิยายฉบับเต็ม ไม่ต้องมีคำอธิบายก่อนหรือหลัง`,
-      project.idea.wordsPerChapter,
-    );
-    return { text, job: addJob('chapter', prompt, `เขียนตอนที่ ${chapter.number} · ${countWords(text)} คำ`, settings, startedAt) };
+Story Bible
+Premise: ${project.bible.premise}
+Style Guide: ${project.bible.styleGuide}
+กฎโลก: ${project.bible.worldRules}
+ตัวละครและสถานะ:
+${context.characterState}
+
+Story State ล่าสุด
+${context.storyState}
+
+Chapter Memory ล่าสุด
+${context.previousMemories}
+
+สรุปสองตอนก่อนหน้า:
+${context.previousTwoChapterSummaries}
+
+ข้อความท้ายตอนก่อนหน้า:
+${context.previousChapterEnding}
+
+Canon ล่าสุด:
+- ${context.recentCanon}
+
+ปมที่ยังไม่คลี่คลาย:
+- ${context.unresolvedMysteries}
+
+แผนฉากบังคับสำหรับตอนนี้
+${scenePlanPrompt(scenePlan)}
+
+${openingRules(project, chapter)}
+
+ข้อกำหนดทั้งตอน:
+- ฉากแรกต้องเกิดจากผลของตอนก่อนหรือเส้นเรื่องหลัก ห้ามรีเซ็ตสถานการณ์
+- ใช้แผนฉากทั้ง 4 ฉาก แต่เขียนเป็นนิยายลื่นไหลโดยไม่ใส่หัวข้อฉาก
+- ทุกฉากต้องเปลี่ยนข้อมูล ความสัมพันธ์ เป้าหมาย หรือความเสี่ยงอย่างน้อยหนึ่งอย่าง
+- ห้ามใช้ย่อหน้าแม่แบบ ห้ามทวน brief และห้ามบอกตรง ๆ ว่า “เป้าหมาย/ผลลัพธ์ของตอนคือ”
+- บทสนทนาต้องมี subtext และการกระทำประกอบ
+- ประโยคท้ายต้องพาไปยัง “${chapter.cliffhanger}” โดยไม่คัดลอก brief ตรง ๆ
+- ส่งเฉพาะต้นฉบับนิยาย ไม่มี Markdown และไม่มีคำอธิบายกระบวนการ`;
+
+    let text = '';
+    let lastReport;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const requestPrompt = attempt === 0
+        ? basePrompt
+        : `${qualityRewriteInstruction(lastReport!)}
+
+ร่างเดิมที่ห้ามเลียนแบบ:
+${text.slice(0, 5000)}
+
+${basePrompt}`;
+      text = await generateChapterAtTargetLength(settings, requestPrompt, project.idea.wordsPerChapter);
+      lastReport = evaluateChapterQuality(project, chapter, text);
+      if (!lastReport.needsRewrite) break;
+    }
+
+    const finalReport = evaluateChapterQuality(project, chapter, text);
+    if (finalReport.needsRewrite) {
+      throw new Error(`ตอนที่ ${chapter.number} ยังซ้ำกับตอนก่อนหลังเขียนใหม่ 3 รอบ (${finalReport.reasons.join(', ')})`);
+    }
+
+    return {
+      text,
+      scenePlan,
+      qualityScore: finalReport.score,
+      job: addJob('chapter', prompt, `เขียนตอนที่ ${chapter.number} · ${countWords(text)} คำ · คุณภาพ ${finalReport.score}/100`, settings, startedAt),
+    };
   }
 
-  const text = `# ตอนที่ ${chapter.number}: ${chapter.title}
-
-รินหยุดยืนอยู่หน้าหน้าต่างที่สะท้อนเงาของตัวเองซ้อนกับเมืองยามค่ำคืน เสียงฝนเคาะกระจกเป็นจังหวะเดียวกับหัวใจที่เต้นไม่เป็นระเบียบ ตั้งแต่เธอพบร่องรอยล่าสุด ทุกอย่างที่เคยมั่นใจก็เริ่มหลุดออกจากกันเหมือนด้ายที่ถูกดึงผิดเส้น
-
-เป้าหมายของเธอในคืนนี้ชัดเจน: ${chapter.goal} แต่ความชัดเจนนั้นไม่ได้ทำให้ทางข้างหน้าง่ายขึ้น เพราะ ${chapter.conflict}
-
-คีรินวางสมุดเก่าลงบนโต๊ะอย่างระวัง ราวกับมันเป็นสิ่งมีชีวิตที่อาจตื่นขึ้นมาได้ทุกเมื่อ "ถ้าเปิดหน้านี้แล้ว เธออาจจำบางอย่างได้" เขาพูดเบา ๆ "แต่ฉันไม่แน่ใจว่าเธอจะอยากจำมันจริงหรือเปล่า"
-
-รินอยากถามว่าทำไมเขาถึงทำเหมือนรู้คำตอบอยู่แล้ว แต่สายตาของเขามีความเหนื่อยล้าที่เธอไม่เคยเห็นมาก่อน ความโกรธที่เตรียมไว้จึงกลายเป็นความเงียบ เธอเปิดสมุดด้วยมือที่เย็นเฉียบ และพบข้อความสั้น ๆ ที่เขียนด้วยลายมือของตัวเอง
-
-"อย่าเชื่อความทรงจำแรกที่กลับมา"
-
-ผลลัพธ์ของคืนนี้คือ ${chapter.outcome} แต่แทนที่มันจะทำให้ทุกอย่างกระจ่าง มันกลับเปิดช่องว่างใหม่ระหว่างรินกับคนที่เธออยากไว้ใจที่สุด
-
-ก่อนที่เธอจะพูดอะไร ไฟทั้งห้องดับลงพร้อมกัน เสียงของเด็กผู้หญิงคนหนึ่งดังขึ้นจากหน้าสมุด ทั้งที่ไม่มีใครอยู่ตรงนั้น
-
-"ถ้าเธอจำเขาได้ เขาจะหายไปอีกครั้ง"
-
-${chapter.cliffhanger}
-
-บริบท canon ล่าสุดที่ต้องคุม:
-- ${memory || 'ยังไม่มี canon จากตอนก่อนหน้า'}`;
-
-  return { text, job: addJob('chapter', prompt, text.slice(0, 120), settings, startedAt) };
+  const text = generateMockChapter(project, { ...chapter, scenePlan });
+  const report = evaluateChapterQuality(project, chapter, text);
+  return {
+    text,
+    scenePlan,
+    qualityScore: report.score,
+    job: addJob('chapter', prompt, `Mock ตอนที่ ${chapter.number} · คุณภาพ ${report.score}/100`, settings, startedAt),
+  };
 }
 
 export async function rewriteChapter(project: NovelProject, chapter: ChapterPlan, settings?: AiSettings) {

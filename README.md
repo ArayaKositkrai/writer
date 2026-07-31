@@ -1,119 +1,88 @@
-<!-- README.md -->
+# Novel Studio AI V2
 
-# Novel Studio
+เว็บสร้างนิยายด้วย AI แบบง่าย: เล่าไอเดีย → เลือกพล็อต → ให้ AI เขียนทั้งเล่ม → อ่าน/แก้ไข → ดาวน์โหลด DOCX
 
-Novel Studio คือเว็บแอปสำหรับวางแผน เขียน ตรวจทาน และส่งออกนิยายด้วย workflow แบบเป็นขั้นตอน ตั้งแต่ไอเดียเริ่มต้นไปจนถึงต้นฉบับพร้อมใช้งาน
-
-## ฟีเจอร์หลัก
-
-- Idea Base สำหรับกำหนดแนวเรื่อง กลุ่มผู้อ่าน โทน และจำนวนตอน
-- Pitch Lab สำหรับสร้างและเลือกแนวทางของเรื่อง
-- Story Bible สำหรับเก็บกฎโลก ตัวละคร เส้นเวลา ปม และ canon
-- Chapter Board สำหรับวางโครงตอนและติดตามสถานะ
-- Chapter Writer พร้อม Rich Text Editor และเครื่องมือ AI
-- Quality Review สำหรับตรวจ continuity, logic, character, style, pacing และ hook
-- Export เป็น DOCX, Markdown และ JSON
-- รองรับ Gemini, OpenAI และ Ollama Local
-- เก็บโปรเจกต์ใน Local Storage และนำเข้าไฟล์สำรองกลับมาได้
-
-## Tech Stack
-
-- React 19
-- TypeScript
-- Vite 7
-- Google GenAI SDK
-- OpenAI SDK
-- Zod
-- DOCX
-- Lucide React
-
-## เริ่มใช้งาน
+## Run
 
 ```bash
-npm install
 cp .env.example .env
+npm install
 npm run dev
 ```
 
-เปิดเว็บที่:
+เปิด `http://127.0.0.1:5173`
 
-```text
-http://127.0.0.1:5173
-```
-
-## ตั้งค่า Environment Variables
-
-ค่าการเชื่อมต่อ AI ถูกแยกไว้ใน `.env`
-
-```env
-VITE_GEMINI_API_KEY=
-VITE_OPENAI_API_KEY=
-VITE_OLLAMA_CHAT_URL=http://localhost:11434/api/chat
-VITE_AI_REQUEST_TIMEOUT_MS=90000
-VITE_OLLAMA_REQUEST_TIMEOUT_MS=600000
-```
-
-ระบบจะเลือก API key ตามลำดับนี้:
-
-1. Key ที่ผู้ใช้กรอกในหน้าตั้งค่า AI ของแท็บปัจจุบัน
-2. Key จากไฟล์ `.env`
-
-> ตัวแปรที่ขึ้นต้นด้วย `VITE_` จะถูกนำไปใช้ใน frontend bundle จึงเหมาะกับการพัฒนาในเครื่องหรือระบบส่วนตัวเท่านั้น สำหรับ production ควรย้ายการเรียก Gemini/OpenAI ไป backend proxy เพื่อไม่ให้ key ปรากฏใน browser
-
-## ใช้งาน Ollama
-
-```bash
-ollama pull gemma4:e4b
-ollama serve
-```
-
-จากนั้นเลือก:
-
-```text
-Provider: Ollama (Local)
-Operation Mode: Live API
-```
-
-ค่าเริ่มต้นของ Ollama endpoint คือ:
-
-```text
-http://localhost:11434/api/chat
-```
-
-## โครงสร้างโปรเจกต์
-
-```text
-src/
-├── components/          UI components และ feature panels
-├── data/                ค่าเริ่มต้นและ presets
-├── pages/               หน้าหลักของแต่ละ workflow
-├── services/            AI, credentials, storage, export และ rich text
-├── App.tsx              application shell และ state orchestration
-├── routes.ts            route definitions
-├── types.ts             shared domain types
-└── styles.css           global styles
-```
-
-## Workflow
-
-```text
-Idea → Pitch → Story Bible → Chapter Board → Writer → Export
-```
-
-ข้อมูลทั้งหมดของโปรเจกต์อยู่ใน `NovelProject` และถูกบันทึกลง Local Storage ผ่าน `src/services/storage.ts`
-
-## การตรวจสอบ Build
+## Build
 
 ```bash
 npm run build
-npm run preview
 ```
 
-## เอกสารสำหรับพัฒนาต่อ
+## AI configuration
 
-- `ARCHITECTURE.md` โครงสร้างและการไหลของระบบ
-- `FEATURES.md` รายละเอียดฟีเจอร์
-- `PROJECT_PROGRESS.md` สถานะล่าสุดของโปรเจกต์
-- `BUGS.md` ปัญหาและความเสี่ยงที่ควรแก้
-- `ROADMAP.md` ลำดับการพัฒนาต่อ
-- `CHANGELOG.md` ประวัติการเปลี่ยนแปลง
+ค่าทั้งหมดแยกไว้ใน `.env`
+
+```env
+VITE_GEMINI_API_KEY=
+VITE_GEMINI_MODEL=gemini-2.5-flash
+VITE_OPENAI_API_KEY=
+VITE_OPENAI_MODEL=gpt-4.1-mini
+VITE_OLLAMA_BASE_URL=http://127.0.0.1:11434
+VITE_OLLAMA_MODEL=llama3.1:8b
+```
+
+> หมายเหตุ: `VITE_*` ถูก bundle ไปที่ frontend เหมาะกับการใช้งานในเครื่องส่วนตัว สำหรับ production ควรเรียก AI ผ่าน backend proxy
+
+## Main flow
+
+1. ใส่ไอเดียเรื่องในช่องใหญ่ช่องเดียว
+2. AI สร้างพล็อต 3 แนวทาง พร้อม Story Bible และโครงตอน
+3. เลือกพล็อตแล้วสั่งให้ AI เขียนครบทั้งเล่ม
+4. อ่านและแก้ไขต้นฉบับในโหมดหนังสือ
+5. ดาวน์โหลด DOCX, Markdown หรือ JSON Backup
+
+## Structure
+
+```text
+src/
+├── components/
+│   ├── SetupView.tsx
+│   ├── GenerateView.tsx
+│   ├── ReaderView.tsx
+│   ├── ExportView.tsx
+│   └── SettingsView.tsx
+├── services/
+│   ├── aiProvider.ts
+│   ├── aiService.ts
+│   ├── exporter.ts
+│   └── storage.ts
+├── styles/app.css
+├── App.tsx
+└── types.ts
+```
+
+## ใช้ Typhoon API
+
+โปรเจกต์ตั้งค่า Typhoon เป็น AI หลักสำหรับคิดพล็อต วาง Story Bible และเขียนนิยายภาษาไทยแบบต่อเนื่อง
+
+1. สร้าง API key จาก Typhoon Playground
+2. เปิดไฟล์ `.env`
+3. ใส่คีย์ในตัวแปรนี้
+
+```env
+VITE_TYPHOON_API_KEY=ใส่_api_key_จริงตรงนี้
+VITE_TYPHOON_BASE_URL=https://api.opentyphoon.ai/v1
+VITE_TYPHOON_MODEL=typhoon-v2.1-12b-instruct
+```
+
+หลังแก้ `.env` ต้องหยุด dev server แล้วเปิดใหม่:
+
+```bash
+npm run dev
+```
+
+> หมายเหตุ: ตัวแปรที่ขึ้นต้นด้วย `VITE_` จะถูกส่งไปยัง frontend bundle จึงเหมาะกับการพัฒนาในเครื่องเท่านั้น สำหรับ production ควรเรียก Typhoon ผ่าน backend proxy เพื่อไม่เปิดเผย API key
+
+## Typhoon output format
+
+For Typhoon, the application uses tagged text rather than JSON when generating plot options, Story Bible data, chapter outlines, and quality reviews. This is intentional: Typhoon is more reliable at following short text templates than producing large nested JSON objects. Parsed results are still validated before saving.

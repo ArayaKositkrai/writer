@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { AiSettings } from '../types';
 import { getApiKey } from './credentials';
 import { appEnv } from './env';
+import { parseTyphoonStructured, typhoonFormatInstruction } from './typhoonStructured';
 
 const REQUEST_TIMEOUT_MS = appEnv.requestTimeoutMs;
 const OLLAMA_REQUEST_TIMEOUT_MS = appEnv.ollamaRequestTimeoutMs;
@@ -15,7 +16,15 @@ export interface GenerateTextOptions {
 }
 
 function outputTokenLimit(options?: GenerateTextOptions) {
-  return Math.min(16_000, Math.max(512, Math.round(options?.maxOutputTokens ?? 16_000)));
+  return Math.min(8_192, Math.max(256, Math.round(options?.maxOutputTokens ?? 2_048)));
+}
+
+function typhoonOutputTokenLimit(system: string, prompt: string, options?: GenerateTextOptions) {
+  // Typhoon API จำกัด prompt + completion รวมกันไม่เกิน 8,192 tokens
+  // ภาษาไทยเฉลี่ยราว 2-3 tokens ต่อคำ จึงกันพื้นที่ให้ input แบบ conservative
+  const estimatedInputTokens = Math.ceil((system.length + prompt.length) / 2);
+  const remaining = Math.max(256, 8_192 - estimatedInputTokens - 256);
+  return Math.min(outputTokenLimit(options), remaining, 4_096);
 }
 
 export class AiProviderError extends Error {
@@ -34,7 +43,11 @@ function controllerWithTimeout(timeoutMs = REQUEST_TIMEOUT_MS) {
 function requireKey(settings: AiSettings) {
   const key = getApiKey(settings.provider);
   if (!key) {
-    const providerName = settings.provider === 'openai' ? 'OpenAI' : 'Google AI';
+    const providerName = settings.provider === 'typhoon'
+      ? 'Typhoon'
+      : settings.provider === 'openai'
+        ? 'OpenAI'
+        : 'Google AI';
     throw new AiProviderError(`ยังไม่ได้กรอก API key สำหรับ ${providerName}`, 'missing_key');
   }
   return key;
@@ -157,6 +170,103 @@ async function ollamaStructured<T>(settings: AiSettings, system: string, prompt:
   }
 }
 
+
+async function typhoonChat(
+  settings: AiSettings,
+  system: string,
+  prompt: string,
+  options: GenerateTextOptions = {},
+) {
+  const { controller, clear } = controllerWithTimeout();
+  // Always use the model exposed by the current Typhoon account via .env.
+  // settings.model may contain a stale value persisted by an older browser session.
+  const model = appEnv.typhoonModel;
+
+  try {
+    const response = await fetch(`${appEnv.typhoonBaseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${requireKey(settings)}`,
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: prompt },
+        ],
+        temperature: options.temperature ?? 0.7,
+        top_p: 0.95,
+        max_tokens: typhoonOutputTokenLimit(system, prompt, options),
+        stream: false,
+      }),
+    });
+
+    const raw = await response.text();
+    let data: {
+      choices?: Array<{ message?: { content?: string } }>;
+      detail?: string;
+      error?: { message?: string } | string;
+    } = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      // เก็บ raw response ไว้ใช้สร้างข้อความผิดพลาดด้านล่าง
+    }
+
+    if (!response.ok) {
+      const apiMessage = typeof data.error === 'string'
+        ? data.error
+        : data.error?.message;
+      const detail = apiMessage || data.detail || raw || `Typhoon HTTP ${response.status}`;
+      throw Object.assign(new Error(detail), { status: response.status });
+    }
+
+    const text = data.choices?.[0]?.message?.content?.trim();
+    if (!text) {
+      throw new AiProviderError('Typhoon ไม่ส่งเนื้อหากลับมา', 'invalid_response');
+    }
+    return text;
+  } catch (error) {
+    throw normalizeProviderError(error);
+  } finally {
+    clear();
+  }
+}
+
+async function typhoonText(
+  settings: AiSettings,
+  system: string,
+  prompt: string,
+  options?: GenerateTextOptions,
+) {
+  return typhoonChat(settings, system, prompt, options);
+}
+
+async function typhoonStructured<T>(
+  settings: AiSettings,
+  system: string,
+  prompt: string,
+  schema: z.ZodType<T>,
+  schemaName: string,
+) {
+  const instruction = typhoonFormatInstruction(schemaName);
+  const raw = await typhoonChat(
+    settings,
+    `${system}\nคุณต้องตอบตาม template ข้อความที่กำหนดอย่างเคร่งครัด`,
+    `${prompt}\n\n${instruction}`,
+    { maxOutputTokens: 4_096, temperature: 0.35 },
+  );
+
+  try {
+    return parseTyphoonStructured(raw, schemaName, schema);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Typhoon ส่งข้อมูลในรูปแบบที่ระบบอ่านไม่ได้';
+    throw new AiProviderError(message, 'invalid_response');
+  }
+}
+
 async function openAiText(settings: AiSettings, system: string, prompt: string, options?: GenerateTextOptions) {
   const { default: OpenAI } = await import('openai');
   const client = new OpenAI({ apiKey: requireKey(settings), dangerouslyAllowBrowser: true });
@@ -257,12 +367,14 @@ async function geminiStructured<T>(settings: AiSettings, system: string, prompt:
 }
 
 export async function generateText(settings: AiSettings, system: string, prompt: string, options?: GenerateTextOptions) {
+  if (settings.provider === 'typhoon') return typhoonText(settings, system, prompt, options);
   if (settings.provider === 'openai') return openAiText(settings, system, prompt, options);
   if (settings.provider === 'ollama') return ollamaText(settings, system, prompt, options);
   return geminiText(settings, system, prompt, options);
 }
 
 export async function generateStructured<T>(settings: AiSettings, system: string, prompt: string, schema: z.ZodType<T>, schemaName: string) {
+  if (settings.provider === 'typhoon') return typhoonStructured(settings, system, prompt, schema, schemaName);
   if (settings.provider === 'openai') return openAiStructured(settings, system, prompt, schema, schemaName);
   if (settings.provider === 'ollama') return ollamaStructured(settings, system, prompt, schema);
   return geminiStructured(settings, system, prompt, schema);
