@@ -1,3 +1,5 @@
+// src/data/presets.ts
+
 import { IdeaSettings } from '../types';
 
 export interface NovelPreset {

@@ -1,3 +1,5 @@
+// src/types.ts
+
 export type WorkflowStep =
   | 'idea'
   | 'pitch'

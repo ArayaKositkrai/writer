@@ -1,3 +1,5 @@
+// src/pages/ChapterWriterPage.tsx
+
 import ChapterWriter from '../components/ChapterWriter';
 import { AiSettings, ChapterPlan, NovelProject, WorkflowStep } from '../types';
 

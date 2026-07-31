@@ -1,3 +1,5 @@
+// src/pages/ChapterBoardPage.tsx
+
 import ChapterBoard from '../components/ChapterBoard';
 import { NovelProject, WorkflowStep } from '../types';
 

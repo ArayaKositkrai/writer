@@ -1,3 +1,5 @@
+// src/components/PitchLab.tsx
+
 import { ArrowLeft, ArrowRight, Check, CircleAlert, Copy, LoaderCircle, Pencil, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { buildPitchIdeaSignature, buildPitchPrompt, buildStoryBibleFromPitch, generatePitchOptions } from '../services/aiService';

@@ -1,3 +1,5 @@
+// src/components/StoryBible.tsx
+
 import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { createId } from '../data/defaultProject';

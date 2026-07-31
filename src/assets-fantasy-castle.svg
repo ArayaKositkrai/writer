@@ -1,0 +1,23 @@
+<!-- src/assets-fantasy-castle.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="sky" cx="72%" cy="12%" r="82%">
+      <stop offset="0" stop-color="#38256b"/><stop offset=".28" stop-color="#171538"/><stop offset="1" stop-color="#050713"/>
+    </radialGradient>
+    <radialGradient id="moon"><stop offset="0" stop-color="#fffde8"/><stop offset=".6" stop-color="#d9c5ff"/><stop offset="1" stop-color="#9675d8"/></radialGradient>
+    <linearGradient id="mist" x1="0" x2="1"><stop stop-color="#512a7c" stop-opacity="0"/><stop offset=".45" stop-color="#6f3ca0" stop-opacity=".26"/><stop offset="1" stop-color="#261545" stop-opacity="0"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="12"/></filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <g fill="#bc92ff" opacity=".8">
+    <circle cx="130" cy="115" r="2"/><circle cx="330" cy="80" r="1.5"/><circle cx="580" cy="150" r="2"/><circle cx="890" cy="74" r="1.5"/><circle cx="1110" cy="155" r="2"/><circle cx="1450" cy="110" r="2"/><circle cx="1530" cy="310" r="1.4"/><circle cx="720" cy="310" r="1.5"/>
+  </g>
+  <circle cx="1250" cy="170" r="115" fill="#8c63d8" opacity=".18" filter="url(#glow)"/>
+  <circle cx="1250" cy="170" r="78" fill="url(#moon)" opacity=".9"/>
+  <path d="M0 710Q180 560 350 690T720 640T1050 660T1600 570V1000H0Z" fill="#09091a"/>
+  <path d="M920 650V380h42v-85h34v85h48V260h42v-78h30v78h52v110h50v280z" fill="#080915" stroke="#7b4daf" stroke-opacity=".25" stroke-width="3"/>
+  <path d="M945 380l20-44 20 44m53 0 27-60 27 60m40-120 22-48 22 48" fill="#090a17" stroke="#b675ff" stroke-opacity=".32" stroke-width="4"/>
+  <g fill="#d8a85b" opacity=".72"><rect x="955" y="430" width="8" height="18"/><rect x="1000" y="465" width="8" height="18"/><rect x="1065" y="355" width="8" height="18"/><rect x="1145" y="320" width="8" height="18"/><rect x="1180" y="430" width="8" height="18"/></g>
+  <ellipse cx="790" cy="760" rx="740" ry="95" fill="url(#mist)" filter="url(#glow)"/>
+  <path d="M0 850Q260 810 490 865T950 840T1600 820V1000H0Z" fill="#05060e"/>
+</svg>

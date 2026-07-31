@@ -1,3 +1,5 @@
+// src/components/RichTextEditor.tsx
+
 import { Bold, IndentDecrease, IndentIncrease, Italic, Pilcrow, Rows3 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { normalizeRichText, sanitizeRichText } from '../services/richText';

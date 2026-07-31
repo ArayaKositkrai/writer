@@ -1,3 +1,5 @@
+// src/services/richText.ts
+
 const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'BLOCKQUOTE', 'LI']);
 const ALLOWED_TAGS = new Set(['P', 'DIV', 'BR', 'STRONG', 'B', 'EM', 'I', 'H2', 'H3', 'BLOCKQUOTE', 'UL', 'OL', 'LI']);
 

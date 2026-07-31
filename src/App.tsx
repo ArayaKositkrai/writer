@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Brain, FileText, Sparkles } from 'lucide-react';
 import { buildChapters, createDefaultProject } from './data/defaultProject';

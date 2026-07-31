@@ -1,3 +1,5 @@
+// src/components/ChapterBoard.tsx
+
 import { ArrowLeft, Edit3, LayoutGrid, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createChapter } from '../data/defaultProject';

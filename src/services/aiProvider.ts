@@ -1,10 +1,13 @@
+// src/services/aiProvider.ts
+
 import { z } from 'zod';
 import { AiSettings } from '../types';
 import { getApiKey } from './credentials';
+import { appEnv } from './env';
 
-const REQUEST_TIMEOUT_MS = 90_000;
-const OLLAMA_REQUEST_TIMEOUT_MS = 10 * 60_000;
-const OLLAMA_CHAT_URL = 'http://localhost:11434/api/chat';
+const REQUEST_TIMEOUT_MS = appEnv.requestTimeoutMs;
+const OLLAMA_REQUEST_TIMEOUT_MS = appEnv.ollamaRequestTimeoutMs;
+const OLLAMA_CHAT_URL = appEnv.ollamaChatUrl;
 
 export interface GenerateTextOptions {
   maxOutputTokens?: number;

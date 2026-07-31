@@ -1,3 +1,5 @@
+// src/services/exporter.ts
+
 import { ChapterPlan, NovelProject } from '../types';
 import { isRichText, richTextToMarkdown, richTextToPlainText } from './richText';
 

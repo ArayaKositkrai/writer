@@ -1,3 +1,5 @@
+// src/data/defaultProject.ts
+
 import { ChapterPlan, NovelProject } from '../types';
 
 const now = () => new Date().toISOString();

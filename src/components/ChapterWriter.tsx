@@ -1,3 +1,5 @@
+// src/components/ChapterWriter.tsx
+
 import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Copy, Download, FileJson, FilePenLine, ScanText, Sparkles, WandSparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { draftChapter, reviewChapter, reviseChapterFromReviews } from '../services/aiService';

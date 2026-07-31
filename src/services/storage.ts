@@ -1,3 +1,5 @@
+// src/services/storage.ts
+
 import { AiSettings, ProjectStore, NovelProject } from '../types';
 import { createChapter, createDefaultProject } from '../data/defaultProject';
 import { hasApiKey } from './credentials';

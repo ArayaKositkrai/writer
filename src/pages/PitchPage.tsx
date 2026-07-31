@@ -1,3 +1,5 @@
+// src/pages/PitchPage.tsx
+
 import PitchLab from '../components/PitchLab';
 import { AiSettings, NovelProject, WorkflowStep } from '../types';
 

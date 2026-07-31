@@ -1,3 +1,5 @@
+// src/components/ExportPanel.tsx
+
 import { 
   ArrowLeft, Check, Copy, Download, FileJson, FileText, PackageCheck, Save, 
   ChevronLeft, ChevronRight, Maximize2, Minimize2 

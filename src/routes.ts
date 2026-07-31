@@ -1,3 +1,5 @@
+// src/routes.ts
+
 import { WorkflowStep } from './types';
 
 export interface WorkflowRoute {

@@ -1,3 +1,5 @@
+// src/pages/WorkflowRouteView.tsx
+
 import { AiSettings, ChapterPlan, NovelProject, WorkflowStep } from '../types';
 import IdeaPage from './IdeaPage';
 import PitchPage from './PitchPage';

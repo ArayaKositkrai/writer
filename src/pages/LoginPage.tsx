@@ -1,3 +1,5 @@
+// src/pages/LoginPage.tsx
+
 import { ArrowRight, BookOpen, LockKeyhole, Mail, PenLine, Sparkles, UserRound, Wand2 } from 'lucide-react';
 
 interface LoginPageProps {

@@ -1,3 +1,5 @@
+// src/pages/IdeaPage.tsx
+
 import IdeaBase from '../components/IdeaBase';
 import { NovelProject, WorkflowStep } from '../types';
 

@@ -1,3 +1,5 @@
+// src/services/aiService.ts
+
 import { z } from 'zod';
 import { AiSettings, ChapterPlan, GenerationJob, NovelProject, PitchOption, ReviewItem, StoryBible } from '../types';
 import { createChapter, createId } from '../data/defaultProject';

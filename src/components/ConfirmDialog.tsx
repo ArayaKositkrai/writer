@@ -1,3 +1,5 @@
+// src/components/ConfirmDialog.tsx
+
 import { AlertTriangle, X } from 'lucide-react';
 import { useEffect } from 'react';
 

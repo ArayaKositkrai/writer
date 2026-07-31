@@ -1,3 +1,5 @@
+// src/components/Sidebar.tsx
+
 import {
   Bot,
   ChevronDown,
@@ -18,9 +20,15 @@ import {
 } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { novelPresets } from '../data/presets';
-import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '../services/credentials';
+import {
+  clearApiKey,
+  getApiKey,
+  hasApiKey,
+  isApiKeyFromEnvironment,
+  setApiKey,
+} from '../services/credentials';
 import { AiSettings, NovelProject } from '../types';
-
+import { defaultModel, operationModeDescriptions, providerDescriptions, providerModelOptions } from './sidebar-config';
 interface SidebarProps {
   collapsed: boolean;
   projects: NovelProject[];
@@ -35,52 +43,6 @@ interface SidebarProps {
   onImportProject: (file: File) => void;
   onLogout: () => void;
 }
-
-interface ModelOption {
-  value: string;
-  label: string;
-  description: string;
-}
-
-const providerDescriptions: Record<AiSettings['provider'], string> = {
-  gemini: 'Cloud ของ Google · เร็วและรองรับ structured output เหมาะกับทุก Step · ต้องใช้ API key',
-  openai: 'Cloud ของ OpenAI · เด่นด้านคุณภาพการเขียนและแก้ไข · ต้องใช้ API key',
-  ollama: 'รันในเครื่องผ่าน localhost · ข้อมูลไม่ออกจากเครื่อง · ความเร็วขึ้นกับ RAM/GPU',
-};
-
-const providerModelOptions: Record<AiSettings['provider'], ModelOption[]> = {
-  gemini: [
-    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash (แนะนำ)', description: 'เร็วและสมดุล: Pitch, Story Bible, โครงตอน, เขียนร่าง และ Review' },
-    { value: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B A4B', description: 'งานเขียนยาวและเหตุผลซับซ้อน; ใช้เวลามากกว่า Flash' },
-    { value: 'gemma-4-31b-it', label: 'Gemma 4 31B', description: 'เน้นคุณภาพต้นฉบับและการวางเหตุผล; ช้ากว่า 26B' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'เหมาะกับ Story Bible ซับซ้อนและ Quality Review แบบละเอียด' },
-    { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite', description: 'ประหยัดและเร็ว เหมาะกับ Pitch/Review; คุณภาพงานยาวอาจลดลง' },
-  ],
-  openai: [
-    { value: 'gpt-5.4-mini', label: 'GPT-5.4 mini (แนะนำ)', description: 'สมดุลคุณภาพ/ความเร็ว ใช้ได้ดีกับทุก Step' },
-    { value: 'gpt-5.5', label: 'GPT-5.5 (คุณภาพสูง)', description: 'เหมาะกับโครงเรื่องซับซ้อน ต้นฉบับคุณภาพสูง และรีไรต์' },
-    { value: 'gpt-5.4-nano', label: 'GPT-5.4 nano (ประหยัด)', description: 'เหมาะกับ Pitch หรือ Review สั้นๆ; ไม่แนะนำสำหรับต้นฉบับยาว' },
-  ],
-  ollama: [
-    { value: 'gemma4:e4b', label: 'Gemma 4 E4B (เร็วสุด / แนะนำ)', description: 'เหมาะกับ Pitch, โครงตอน และ Review; เร็วสุดสำหรับเครื่องทั่วไป' },
-    { value: 'gemma4:12b', label: 'Gemma 4 12B (สมดุล)', description: 'เหมาะกับ Story Bible และต้นฉบับ เมื่อมี RAM/GPU เพียงพอ' },
-    { value: 'gemma4:26b', label: 'Gemma 4 26B A4B (คุณภาพสูง / ช้า)', description: 'เน้นต้นฉบับและเหตุผล; ไม่เหมาะถ้าต้องการความเร็ว' },
-    { value: 'gemma4:31b', label: 'Gemma 4 31B (ช้าที่สุด)', description: 'คุณภาพสูงสุดในกลุ่ม Local; ต้องใช้ทรัพยากรสูงมาก' },
-  ],
-};
-
-const defaultModel: Record<AiSettings['provider'], string> = {
-  gemini: 'gemini-3.5-flash',
-  openai: 'gpt-5.4-mini',
-  ollama: 'gemma4:e4b',
-};
-
-const operationModeDescriptions = {
-  mock: 'Mock AI: ทดลองใช้งานด้วยข้อมูลจำลอง ไม่เรียก API จริง',
-  manual: 'Manual Prompt: ให้ระบบช่วยจัด prompt แล้วคนเขียนนำไปใช้เอง',
-  api: 'Live API: เรียกโมเดลจริงผ่าน API สำหรับผลลัพธ์จริง',
-};
-
 function Sidebar({
   collapsed,
   projects,
@@ -96,30 +58,26 @@ function Sidebar({
   onLogout,
 }: SidebarProps) {
   const fileRef = useRef<HTMLInputElement>(null);
-  
   const [searchQuery, setSearchQuery] = useState('');
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState(() => getApiKey(aiSettings.provider));
   const [showApiKey, setShowApiKey] = useState(false);
-
   useEffect(() => {
     setApiKeyDraft(getApiKey(aiSettings.provider));
     setShowApiKey(false);
   }, [aiSettings.provider]);
-
   // กรองโปรเจกต์ตามคำค้นหา
   const filteredProjects = projects.filter(p => 
     p.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const selectedModel = providerModelOptions[aiSettings.provider].find((model) => model.value === aiSettings.model);
-
+  const keyComesFromEnvironment = isApiKeyFromEnvironment(aiSettings.provider);
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file) onImportProject(file);
     event.target.value = '';
   }
-
   function changeProvider(provider: AiSettings['provider']) {
     onAiSettingsChange({
       ...aiSettings,
@@ -128,24 +86,19 @@ function Sidebar({
       apiKeyConfigured: provider === 'ollama' || hasApiKey(provider),
     });
   }
-
   function saveCurrentApiKey() {
     setApiKey(aiSettings.provider, apiKeyDraft);
     onAiSettingsChange({ ...aiSettings, apiKeyConfigured: Boolean(apiKeyDraft.trim()) });
   }
-
   function removeCurrentApiKey() {
     clearApiKey(aiSettings.provider);
     setApiKeyDraft('');
     onAiSettingsChange({ ...aiSettings, apiKeyConfigured: false });
   }
-
   return (
     <>
       <aside className={`vibrant-sidebar ${collapsed ? 'is-collapsed' : ''}`}>
-        
-        {/* ปุ่มย่อ-ขยายที่อยู่ตรงเส้นขอบ */}
-        <button 
+<button 
           className="edge-collapse-btn" 
           onClick={onToggleCollapse} 
           title={collapsed ? 'ขยายแถบเครื่องมือ' : 'ย่อแถบเครื่องมือ'}
@@ -153,9 +106,7 @@ function Sidebar({
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
-
-        {/* 1. Header & Brand */}
-        <div className="vsb-header">
+<div className="vsb-header">
           <div className="vsb-brand-mark">
             <Sparkles size={18} color="#fff" />
           </div>
@@ -166,9 +117,7 @@ function Sidebar({
             </div>
           )}
         </div>
-
-        {/* 2. Search Box */}
-        {!collapsed ? (
+{!collapsed ? (
           <div className="vsb-search-wrap">
             <div className="vsb-search">
               <Search size={14} className="icon" />
@@ -187,12 +136,8 @@ function Sidebar({
             </button>
           </div>
         )}
-
-        {/* ส่วนเนื้อหาหลัก - ไม่ให้ Scroll ทะลุ */}
-        <div className="vsb-main-content">
-          
-          {/* 3. คลังนิยาย (โชว์สูงสุด 6 เรื่อง) */}
-          <section className="vsb-section">
+<div className="vsb-main-content">
+<section className="vsb-section">
             <div className="vsb-section-header">
               {!collapsed ? (
                 <>
@@ -216,7 +161,6 @@ function Sidebar({
                 </button>
               )}
             </div>
-
             {!collapsed && <div className="vsb-project-list">
               {filteredProjects.length > 0 ? (
                 filteredProjects.map((project) => (
@@ -242,9 +186,7 @@ function Sidebar({
               )}
             </div>}
           </section>
-
-          {/* 4. ตั้งค่า AI */}
-          <section className="vsb-section">
+<section className="vsb-section">
             <button
               className={`vsb-accordion-btn ${collapsed ? 'tooltip-right' : ''}`}
               data-tooltip="ตั้งค่า AI"
@@ -263,7 +205,6 @@ function Sidebar({
               </div>
               {!collapsed && (isAiOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
             </button>
-            
             {!collapsed && isAiOpen && (
               <div className="vsb-accordion-body">
                 <div className="input-group">
@@ -323,19 +264,21 @@ function Sidebar({
                   </div>
                   <div className="api-key-actions">
                     <span className={aiSettings.apiKeyConfigured ? 'key-status configured' : 'key-status'}>
-                      {aiSettings.apiKeyConfigured ? 'บันทึกในแท็บนี้แล้ว' : 'ยังไม่ได้บันทึก key'}
+                      {aiSettings.apiKeyConfigured
+                        ? keyComesFromEnvironment
+                          ? 'ตั้งค่าจากไฟล์ .env แล้ว'
+                          : 'บันทึกในแท็บนี้แล้ว'
+                        : 'ยังไม่ได้ตั้งค่า key'}
                     </span>
                     {aiSettings.apiKeyConfigured && <button type="button" onClick={removeCurrentApiKey}>ลบ</button>}
                     <button type="button" className="save-key-button" onClick={saveCurrentApiKey} disabled={!apiKeyDraft.trim()}>บันทึก</button>
                   </div>
-                  <p className="api-key-warning">Key เก็บใน sessionStorage และจะหายเมื่อปิดแท็บ เหมาะสำหรับใช้งานส่วนตัวเท่านั้น</p>
+                  <p className="api-key-warning">ระบบจะใช้ key จาก sessionStorage ก่อน และใช้ค่าในไฟล์ .env เป็นค่าเริ่มต้น</p>
                 </div>}
               </div>
             )}
           </section>
-
-          {/* 5. สูตรสำเร็จรูป (สร้างเรื่องใหม่) */}
-          <section className="vsb-section">
+<section className="vsb-section">
             <button
               className={`vsb-accordion-btn ${collapsed ? 'tooltip-right' : ''}`}
               data-tooltip="สูตรสำเร็จรูป"
@@ -354,7 +297,6 @@ function Sidebar({
               </div>
               {!collapsed && (isPresetsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
             </button>
-            
             {!collapsed && isPresetsOpen && (
               <div className="vsb-accordion-body preset-list">
                 {novelPresets.map((preset) => (
@@ -371,27 +313,21 @@ function Sidebar({
               </div>
             )}
           </section>
-
         </div>
-
-        {/* 6. Footer (Logout) */}
-        <div className="vsb-footer">
+<div className="vsb-footer">
           <button className="logout-btn" onClick={onLogout} title="ออกจากระบบ">
             <LogOut size={16} className="logout-icon" />
             {!collapsed && <span>ออกจากระบบ</span>}
           </button>
         </div>
       </aside>
-
-      {/* CSS สีสันสดใส & Layout ห้าม Scroll มั่ว */}
-      <style>{`
+<style>{`
         /* ตัวแปรสีสันใหม่สำหรับ Sidebar นี้โดยเฉพาะ */
         :root {
           --vsb-blue-bg: #e0e7ff; --vsb-blue-text: #4338ca;
           --vsb-purple-bg: #fae8ff; --vsb-purple-text: #a21caf;
           --vsb-orange-bg: #ffedd5; --vsb-orange-text: #c2410c;
         }
-
         .vibrant-sidebar {
           position: relative;
           width: 270px;
@@ -407,7 +343,6 @@ function Sidebar({
           z-index: 50;
         }
         .vibrant-sidebar.is-collapsed { width: 72px; }
-
         /* ปุ่มย่อขยายตรงเส้นขอบ */
         .edge-collapse-btn {
           position: absolute;
@@ -430,7 +365,6 @@ function Sidebar({
           border-color: var(--primary);
           transform: scale(1.1);
         }
-
         /* 1. Header */
         .vsb-header {
           display: flex; align-items: center; gap: 12px;
@@ -446,7 +380,6 @@ function Sidebar({
         }
         .vsb-brand-text h2 { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--text); }
         .vsb-brand-text p { margin: 0; font-size: 0.75rem; color: #ec4899; font-weight: 600; }
-
         /* 2. Search */
         .vsb-search-wrap { padding: 0 16px 12px; flex-shrink: 0; border-bottom: 1px solid var(--line); }
         .vsb-collapsed-nav {
@@ -464,7 +397,6 @@ function Sidebar({
           font-size: 0.85rem; transition: all 0.2s;
         }
         .vsb-search input:focus { border-color: var(--primary-line); background: #fff; box-shadow: 0 0 0 3px var(--primary-soft); }
-
         /* 3. Main Content Wrapper */
         .vsb-main-content {
           min-height: 0;
@@ -475,10 +407,8 @@ function Sidebar({
           overflow-x: hidden;
           padding: 12px 0;
         }
-
         .vsb-section { margin-bottom: 8px; display: flex; flex-direction: column; flex-shrink: 0; }
         .is-collapsed .vsb-section { margin-bottom: 4px; }
-        
         /* Section Header & Icons */
         .vsb-section-header, .vsb-accordion-btn {
           display: flex; align-items: center; justify-content: space-between;
@@ -496,9 +426,7 @@ function Sidebar({
         .bg-blue { background: var(--vsb-blue-bg); color: var(--vsb-blue-text); }
         .bg-purple { background: var(--vsb-purple-bg); color: var(--vsb-purple-text); }
         .bg-orange { background: var(--vsb-orange-bg); color: var(--vsb-orange-text); }
-
         .badge { background: var(--line); color: var(--text-2); padding: 2px 6px; border-radius: 20px; font-size: 0.7rem; margin-left: 6px; }
-        
         .action-group { display: flex; gap: 6px; }
         .icon-btn {
           width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px;
@@ -524,7 +452,6 @@ function Sidebar({
           border-color: var(--primary-line);
           color: var(--primary);
         }
-
         /* Project List: โชว์ 6 เรื่อง ถ้า 1 เรื่องสูง 36px -> 6 เรื่อง = 216px */
         .vsb-project-list {
           max-height: 230px; /* คำนวณให้พอดี 6 เรื่องบวกระยะห่างนิดหน่อย */
@@ -533,7 +460,6 @@ function Sidebar({
         }
         .vsb-project-list::-webkit-scrollbar { width: 5px; }
         .vsb-project-list::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; }
-        
         .project-item {
           display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 4px; align-items: center;
           margin-bottom: 4px; border-radius: 8px; transition: all 0.2s;
@@ -541,7 +467,6 @@ function Sidebar({
         .is-collapsed .project-item { grid-template-columns: 1fr; }
         .project-item:hover { background: var(--surface-soft); }
         .project-item.active { background: var(--primary-soft); }
-        
         .project-btn {
           width: 100%; display: flex; align-items: center; gap: 10px;
           background: transparent; border: none; padding: 8px 10px;
@@ -557,7 +482,6 @@ function Sidebar({
         .project-item.active .color-dot { background: var(--primary); box-shadow: 0 0 6px var(--primary); }
         .project-btn .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 150px; text-align: left; }
         .empty-text { font-size: 0.8rem; color: var(--muted); text-align: center; padding: 10px; }
-
         /* Accordion Body */
         .vsb-accordion-btn:hover { background: var(--surface-soft); }
         .vsb-accordion-body { padding: 4px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -594,7 +518,6 @@ function Sidebar({
         .key-status { margin-right: auto; color: var(--muted); font-size: 0.67rem; }
         .key-status.configured { color: var(--ok); }
         .api-key-warning { margin: 0; border-radius: 6px; background: var(--warning-soft); color: var(--warning); padding: 7px; font-size: 0.66rem; line-height: 1.4; }
-
         /* Presets */
         .preset-list { gap: 6px; }
         .preset-btn {
@@ -611,7 +534,6 @@ function Sidebar({
           background: #fff; color: var(--vsb-orange-text); opacity: 0.5; transition: all 0.2s;
         }
         .preset-btn:hover .preset-action { opacity: 1; background: var(--vsb-orange-text); color: #fff; }
-
         /* Footer (Logout) */
         .vsb-footer {
           padding: 16px; border-top: 1px solid var(--line); flex-shrink: 0;
@@ -624,7 +546,6 @@ function Sidebar({
         }
         .logout-btn:hover { background: var(--danger); color: #fff; box-shadow: 0 4px 12px rgba(207, 63, 63, 0.2); }
         .is-collapsed .logout-btn { padding: 10px 0; }
-
         /* Tooltip CSS */
         .tooltip-bottom { position: relative; }
         .tooltip-bottom::after {
@@ -642,7 +563,6 @@ function Sidebar({
           white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100;
         }
         .tooltip-right:hover::after { opacity: 1; }
-
         @media (max-width: 920px) {
           .vibrant-sidebar,
           .vibrant-sidebar.is-collapsed {
@@ -668,5 +588,4 @@ function Sidebar({
     </>
   );
 }
-
 export default Sidebar;

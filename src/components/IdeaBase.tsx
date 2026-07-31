@@ -1,3 +1,5 @@
+// src/components/IdeaBase.tsx
+
 import { ArrowRight, Check, ChevronDown, Settings, X } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { NovelProject, WorkflowStep } from '../types';

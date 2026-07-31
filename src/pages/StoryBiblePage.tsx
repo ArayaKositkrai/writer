@@ -1,3 +1,5 @@
+// src/pages/StoryBiblePage.tsx
+
 import StoryBible from '../components/StoryBible';
 import { NovelProject, WorkflowStep } from '../types';
 
