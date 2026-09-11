@@ -21,6 +21,15 @@ import LoginPage from './pages/LoginPage';
 import { loginPath, normalizePath, routeForStep, stepForPath } from './routes';
 
 const AUTH_KEY = 'novel_studio_mock_auth_v1';
+const THEME_KEY = 'novel_studio_theme_v1';
+
+type ThemeMode = 'light' | 'dark';
+
+function getInitialTheme(): ThemeMode {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 
 const jobTypeLabel: Record<GenerationJob['type'], string> = {
   pitch: 'Step 2 · สร้าง 3 โครงเรื่อง',
@@ -47,6 +56,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 920);
   const [projectPendingDelete, setProjectPendingDelete] = useState<NovelProject | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem(AUTH_KEY) === 'true');
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
 
   const project = useMemo(
     () => store.projects.find((item) => item.id === store.activeProjectId) ?? store.projects[0],
@@ -64,6 +74,15 @@ function App() {
   useEffect(() => {
     saveAiSettings(aiSettings);
   }, [aiSettings]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
+  }
 
   useEffect(() => {
     const mobileQuery = window.matchMedia('(max-width: 920px)');
@@ -194,7 +213,7 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage onLogin={() => login('account')} onContinueAsGuest={() => login('guest')} />;
+    return <LoginPage onLogin={() => login('account')} onContinueAsGuest={() => login('guest')} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
   return (
@@ -215,6 +234,8 @@ function App() {
         onDeleteProject={removeProject}
         onImportProject={handleImport}
         onLogout={logout}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {!sidebarCollapsed && <button type="button" className="mobile-sidebar-scrim" onClick={() => setSidebarCollapsed(true)} aria-label="ปิดเมนู" />}
@@ -230,6 +251,8 @@ function App() {
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={() => setSidebarCollapsed((value) => !value)}
           onLogout={logout}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
         <section className="workspace-body full-step-workspace-body">
           <div className="stage-panel">

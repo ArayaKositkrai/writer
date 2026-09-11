@@ -1,4 +1,4 @@
-import { Menu, PanelLeftClose } from 'lucide-react';
+import { Menu, Moon, PanelLeftClose, Sun } from 'lucide-react';
 import { WorkflowStep, NovelProject, AiSettings } from '../types';
 import { loginPath, workflowRoutes } from '../routes';
 
@@ -12,6 +12,8 @@ interface TopBarProps {
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onLogout: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
 function TopBar({
@@ -23,7 +25,8 @@ function TopBar({
   aiSettings,
   sidebarCollapsed,
   onToggleSidebar,
-  onLogout,
+  theme,
+  onToggleTheme,
 }: TopBarProps) {
   const currentIndex = workflowRoutes.findIndex((item) => item.step === step);
   const workflowPhases = [
@@ -56,7 +59,7 @@ function TopBar({
               const isActive = index === currentIndex && currentPath !== loginPath;
               const isCompleted = index < currentIndex && currentPath !== loginPath;
               const isLast = localIndex === phase.routes.length - 1;
-              
+
               let statusClass = 'upcoming';
               if (isActive) statusClass = 'active';
               else if (isCompleted) statusClass = 'completed';
@@ -70,7 +73,7 @@ function TopBar({
                     <span className="line-step-num">{index + 1}</span>
                     <span className="line-step-label">{item.shortLabel}</span>
                   </button>
-                  
+
                   {/* เส้นเชื่อมแบบล็อกระยะห่าง */}
                   {!isLast && (
                     <div className={`line-step-divider ${isCompleted ? 'divider-completed' : ''}`}></div>
@@ -90,6 +93,19 @@ function TopBar({
             {aiSettings.operationMode === 'api' ? 'Live API' : aiSettings.operationMode === 'manual' ? 'Manual' : 'Mock'}
           </span>
           <span className="model-pill">{aiSettings.model}</span>
+          <button
+            type="button"
+            className="theme-toggle-button"
+            onClick={onToggleTheme}
+            aria-label={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+            title={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+          >
+            <span className={`theme-toggle-track ${theme}`}>
+              <Sun size={13} className="theme-icon sun" />
+              <Moon size={13} className="theme-icon moon" />
+              <span className="theme-toggle-knob" />
+            </span>
+          </button>
         </div>
       </header>
 
@@ -99,8 +115,8 @@ function TopBar({
           align-items: center;
           width: max-content;
           max-width: 100%;
-          background: #f4f5f8;
-          border: 1px solid #e2e8f0;
+          background: var(--surface-soft);
+          border: 1px solid var(--line);
           border-radius: 999px;
           padding: 6px 14px;
           overflow-x: auto;
@@ -124,13 +140,13 @@ function TopBar({
 
         .workflow-phase-label {
           margin-right: 9px;
-          color: #64748b;
+          color: var(--muted);
           font-size: 0.66rem;
           font-weight: 700;
           white-space: nowrap;
         }
         .phase-short { display: none; }
-        .workflow-phase-divider { width: 1px; height: 26px; background: #cbd5e1; margin: 0 12px; }
+        .workflow-phase-divider { width: 1px; height: 26px; background: var(--line-strong); margin: 0 12px; }
 
         .line-step-group {
           display: flex;
@@ -141,12 +157,12 @@ function TopBar({
         .line-step-divider {
           width: 24px;
           height: 1px;
-          background: #cbd5e1;
+          background: var(--line-strong);
           margin: 0 8px;
         }
-        
+
         .line-step-divider.divider-completed {
-          background: #00a67d;
+          background: var(--ok);
         }
 
         .line-step {
@@ -170,9 +186,9 @@ function TopBar({
           width: 22px;
           height: 22px;
           border-radius: 50%;
-          border: 1px solid #cbd5e1;
-          background: #ffffff;
-          color: #94a3b8;
+          border: 1px solid var(--line-strong);
+          background: var(--surface);
+          color: var(--muted);
           font-size: 0.72rem;
           font-weight: 700;
           transition: all 0.3s;
@@ -181,29 +197,79 @@ function TopBar({
         .line-step-label {
           font-size: 0.78rem;
           font-weight: 700;
-          color: #64748b;
+          color: var(--text-2);
           white-space: nowrap;
         }
 
         /* สถานะ: ผ่านไปแล้ว (Completed) */
         .line-step.completed .line-step-num {
-          background: #00a67d;
-          border-color: #00a67d;
+          background: var(--ok);
+          border-color: var(--ok);
           color: #ffffff;
         }
         .line-step.completed .line-step-label {
-          color: #00a67d;
+          color: var(--ok);
         }
 
         /* สถานะ: ปัจจุบัน (Active) */
         .line-step.active .line-step-num {
-          background: #5542f6;
-          border-color: #5542f6;
+          background: var(--primary);
+          border-color: var(--primary);
           color: #ffffff;
-          box-shadow: 0 0 0 4px rgba(85, 66, 246, 0.15);
+          box-shadow: 0 0 0 4px var(--primary-soft);
         }
         .line-step.active .line-step-label {
-          color: #5542f6;
+          color: var(--primary);
+        }
+
+        /* Theme toggle */
+        .theme-toggle-button {
+          display: inline-flex;
+          align-items: center;
+          border: 0;
+          background: transparent;
+          padding: 0;
+          border-radius: 999px;
+          flex-shrink: 0;
+        }
+        .theme-toggle-track {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 46px;
+          height: 26px;
+          border-radius: 999px;
+          border: 1px solid var(--line-strong);
+          background: var(--surface-soft);
+          padding: 0 6px;
+          transition: background 0.25s ease, border-color 0.25s ease;
+        }
+        .theme-toggle-track.dark {
+          background: #0b1222;
+          border-color: #334155;
+        }
+        .theme-icon {
+          position: relative;
+          z-index: 1;
+          color: var(--muted);
+          transition: color 0.25s ease;
+        }
+        .theme-toggle-track.light .theme-icon.sun { color: var(--warning); }
+        .theme-toggle-track.dark .theme-icon.moon { color: #c7d2fe; }
+        .theme-toggle-knob {
+          position: absolute;
+          top: 2px;
+          left: 2px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: var(--brand-gradient);
+          box-shadow: 0 2px 6px rgba(109, 94, 247, 0.45);
+          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .theme-toggle-track.dark .theme-toggle-knob {
+          transform: translateX(20px);
         }
 
         /* Responsive มือถือ */

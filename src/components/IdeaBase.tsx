@@ -393,10 +393,10 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
         .modern-form-card {
           width: 100%;
           height: 100%; /* เต็มความสูง */
-          background: #ffffff;
-          border-radius: 12px;
-          border: 1px solid #e5e7eb;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+          background: var(--surface);
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--line);
+          box-shadow: var(--shadow);
           display: flex;
           flex-direction: column;
           overflow: hidden;
@@ -407,8 +407,8 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
           align-items: center;
           justify-content: space-between;
           padding: 16px 24px;
-          border-bottom: 1px solid #f3f4f6;
-          background: #ffffff;
+          border-bottom: 1px solid var(--line);
+          background: var(--surface);
         }
         .header-title-group {
           display: flex;
@@ -416,8 +416,8 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
           gap: 12px;
         }
         .step-badge {
-          background: #e0e7ff;
-          color: #4338ca;
+          background: var(--primary-soft);
+          color: var(--primary);
           padding: 4px 10px;
           border-radius: 20px;
           font-size: 0.75rem;
@@ -425,16 +425,18 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
-        .header-icon { color: #7c3aed; }
-        .form-header h2 { margin: 0; font-size: 1.15rem; font-weight: 700; color: #1f2937; }
+        .header-icon { color: var(--primary); }
+        .form-header h2 { margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text); }
 
         .submit-btn {
           display: flex; align-items: center; gap: 8px;
-          background: #7c3aed; color: #ffffff; border: none;
-          padding: 10px 20px; border-radius: 8px;
-          font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.2s;
+          background: var(--brand-gradient); color: #ffffff; border: none;
+          padding: 10px 22px; border-radius: 999px;
+          font-size: 0.9rem; font-weight: 700; cursor: pointer;
+          box-shadow: 0 6px 16px rgba(109, 94, 247, 0.32);
+          transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
         }
-        .submit-btn:hover { background: #6d28d9; }
+        .submit-btn:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 10px 22px rgba(109, 94, 247, 0.4); }
 
         /* Body Scrollable */
         .form-body {
@@ -452,14 +454,14 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
         
         .form-group label {
           display: flex; align-items: center;
-          font-size: 0.85rem; font-weight: 600; color: #4b5563;
+          font-size: 0.85rem; font-weight: 600; color: var(--text-2);
         }
 
         /* Tooltip CSS บริสุทธิ์ (ลอยบนสุด Z-index 99999) */
         .help-dot {
           display: inline-flex; justify-content: center; align-items: center;
           width: 16px; height: 16px; border-radius: 50%;
-          background: #e0e7ff; color: #4338ca; font-size: 10px; font-weight: 800;
+          background: var(--primary-soft); color: var(--primary); font-size: 10px; font-weight: 800;
           margin-left: 8px; cursor: help; position: relative;
         }
         .help-dot::before {
@@ -467,7 +469,7 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
           position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
           width: max-content; max-width: 260px;
           background: #1f2937; color: #ffffff;
-          padding: 8px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 400;
+          padding: 8px 12px; border-radius: 9px; font-size: 0.75rem; font-weight: 400;
           line-height: 1.4; white-space: normal; text-align: left;
           opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 99999;
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -485,13 +487,13 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
         /* Input & Select */
         .modern-input, .modern-select {
           width: 100%; padding: 10px 14px;
-          background-color: #f9fafb; border: 1px solid #e5e7eb;
-          border-radius: 8px; font-size: 0.9rem; color: #374151;
+          background-color: var(--surface-soft); border: 1px solid var(--line);
+          border-radius: 12px; font-size: 0.9rem; color: var(--text);
           transition: all 0.2s; outline: none; font-family: inherit;
         }
         .modern-input:focus, .modern-select:focus {
-          border-color: #7c3aed; background-color: #ffffff;
-          box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+          border-color: var(--primary); background-color: var(--surface);
+          box-shadow: 0 0 0 3px var(--primary-soft);
         }
         textarea.modern-input { resize: vertical; line-height: 1.6; }
 
@@ -500,20 +502,20 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
           position: relative;
           display: flex; align-items: flex-start;
           width: 100%; min-height: 44px;
-          background-color: #f9fafb; border: 1px solid #e5e7eb;
-          border-radius: 8px; transition: all 0.2s;
+          background-color: var(--surface-soft); border: 1px solid var(--line);
+          border-radius: 12px; transition: all 0.2s;
         }
         .combo-input-box.focused {
-          border-color: #7c3aed; background-color: #ffffff; box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+          border-color: var(--primary); background-color: var(--surface); box-shadow: 0 0 0 3px var(--primary-soft);
         }
         .combo-tags-area {
           flex: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 10px;
         }
         .combo-tag {
           display: inline-flex; align-items: center; gap: 6px;
-          background: #f5f3ff; color: #7c3aed;
-          padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 500;
-          border: 1px solid #e0e7ff;
+          background: var(--primary-soft); color: var(--primary);
+          padding: 4px 8px; border-radius: 9px; font-size: 0.8rem; font-weight: 500;
+          border: 1px solid var(--primary-line);
         }
         .combo-tag button {
           background: transparent; border: none; padding: 0; color: inherit;
@@ -522,28 +524,28 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
         .combo-tag button:hover { opacity: 1; }
         .combo-text-input {
           flex: 1; min-width: 180px; border: none; background: transparent;
-          outline: none; font-size: 0.9rem; padding: 4px 0; color: #374151;
+          outline: none; font-size: 0.9rem; padding: 4px 0; color: var(--text);
         }
         .combo-dropdown-btn {
           width: 40px; height: 44px; display: grid; place-items: center;
-          background: transparent; border: none; border-left: 1px solid #e5e7eb;
-          color: #6b7280; cursor: pointer; flex-shrink: 0;
+          background: transparent; border: none; border-left: 1px solid var(--line);
+          color: var(--muted); cursor: pointer; flex-shrink: 0;
         }
         .combo-dropdown-menu {
           position: absolute; top: calc(100% + 6px); left: 0; right: 0;
-          background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 100;
+          background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.15); z-index: 100;
           max-height: 240px; overflow-y: auto; padding: 8px;
           display: flex; flex-direction: column; gap: 2px;
         }
-        .dropdown-title { padding: 4px 8px 8px; font-size: 0.75rem; color: #6b7280; font-weight: 600; }
+        .dropdown-title { padding: 4px 8px 8px; font-size: 0.75rem; color: var(--muted); font-weight: 600; }
         .dropdown-item {
           display: flex; align-items: center; gap: 8px;
           padding: 8px; width: 100%; border: none; background: transparent;
-          text-align: left; font-size: 0.85rem; color: #374151; border-radius: 6px; cursor: pointer;
+          text-align: left; font-size: 0.85rem; color: var(--text); border-radius: 9px; cursor: pointer;
         }
-        .dropdown-item:hover { background: #f3f4f6; }
-        .dropdown-item.selected { background: #f5f3ff; color: #7c3aed; font-weight: 600; }
+        .dropdown-item:hover { background: var(--surface-soft); }
+        .dropdown-item.selected { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
         .check-area { width: 16px; display: grid; place-items: center; }
 
         /* Grid 2 Column */
@@ -556,16 +558,16 @@ function IdeaBase({ project, updateProject, goToStep }: IdeaBaseProps) {
         /* Checkbox Grid (แก้เรื่องสั่น) */
         .checkbox-grid {
           display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
-          background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb;
+          background: var(--surface-soft); padding: 16px; border-radius: 12px; border: 1px solid var(--line);
         }
         .custom-checkbox-label {
           display: flex; align-items: center; gap: 8px; cursor: pointer;
-          font-size: 0.85rem; color: #374151; font-weight: 500;
+          font-size: 0.85rem; color: var(--text); font-weight: 500;
           margin: 0; padding: 0; line-height: 1;
         }
         .custom-checkbox-label input[type="checkbox"] {
           margin: 0; padding: 0;
-          width: 16px; height: 16px; accent-color: #7c3aed; cursor: pointer;
+          width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer;
         }
 
         /* Responsive */

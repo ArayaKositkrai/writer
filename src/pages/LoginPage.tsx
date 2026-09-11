@@ -1,16 +1,29 @@
-import { ArrowRight, BookOpen, LockKeyhole, Mail, PenLine, Sparkles, UserRound, Wand2 } from 'lucide-react';
+import { ArrowRight, BookOpen, LockKeyhole, Mail, Moon, PenLine, Sparkles, Sun, UserRound, Wand2 } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: () => void;
   onContinueAsGuest: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
-function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
+function LoginPage({ onLogin, onContinueAsGuest, theme, onToggleTheme }: LoginPageProps) {
   return (
     <div className="modern-auth-wrapper">
       {/* ของตกแต่งพื้นหลัง (Abstract shapes) */}
       <div className="bg-shape shape-1"></div>
       <div className="bg-shape shape-2"></div>
+      <div className="bg-shape shape-3"></div>
+
+      <button
+        type="button"
+        className="auth-theme-toggle"
+        onClick={onToggleTheme}
+        aria-label={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+        title={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+      >
+        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
 
       <div className="modern-auth-container">
         
@@ -95,10 +108,26 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
           display: flex;
           align-items: center;
           justify-content: center;
-          background-color: #f8fafc;
+          background-color: var(--bg);
           overflow: hidden;
           font-family: 'Noto Sans Thai', sans-serif;
         }
+
+        .auth-theme-toggle {
+          position: absolute;
+          top: 20px; right: 20px;
+          z-index: 20;
+          width: 40px; height: 40px;
+          display: grid; place-items: center;
+          border-radius: 999px;
+          border: 1px solid var(--line-strong);
+          background: var(--surface);
+          color: var(--text-2);
+          cursor: pointer;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+          transition: all 0.2s;
+        }
+        .auth-theme-toggle:hover { color: var(--primary); border-color: var(--primary-line); background: var(--primary-soft); }
 
         /* ของตกแต่งพื้นหลังให้ดูพรีเมียม */
         .bg-shape {
@@ -110,11 +139,15 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
         }
         .shape-1 {
           top: -10%; left: -5%; width: 50vw; height: 50vw;
-          background: radial-gradient(circle, rgba(99,102,241,0.3) 0%, rgba(99,102,241,0) 70%);
+          background: radial-gradient(circle, rgba(109,94,247,0.32) 0%, rgba(109,94,247,0) 70%);
         }
         .shape-2 {
           bottom: -10%; right: -5%; width: 40vw; height: 40vw;
-          background: radial-gradient(circle, rgba(236,72,153,0.2) 0%, rgba(236,72,153,0) 70%);
+          background: radial-gradient(circle, rgba(236,72,153,0.22) 0%, rgba(236,72,153,0) 70%);
+        }
+        .shape-3 {
+          top: 30%; right: 15%; width: 26vw; height: 26vw;
+          background: radial-gradient(circle, rgba(15,184,166,0.2) 0%, rgba(15,184,166,0) 70%);
         }
 
         /* Container หลัก */
@@ -144,13 +177,13 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
         }
         .modern-brand-mark {
           width: 44px; height: 44px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #4f46e5, #ec4899);
+          border-radius: 14px;
+          background: var(--brand-gradient);
           display: grid; place-items: center;
-          box-shadow: 0 8px 16px rgba(236, 72, 153, 0.25);
+          box-shadow: 0 8px 16px rgba(236, 72, 153, 0.3);
         }
         .brand-name {
-          font-size: 1.25rem; font-weight: 800; color: #1e293b; letter-spacing: -0.5px;
+          font-size: 1.25rem; font-weight: 800; color: var(--text); letter-spacing: -0.5px;
         }
 
         .auth-headline {
@@ -158,17 +191,17 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
           font-size: 3rem;
           font-weight: 800;
           line-height: 1.2;
-          color: #0f172a;
+          color: var(--text);
           letter-spacing: -1px;
         }
         .text-gradient {
-          background: linear-gradient(135deg, #4f46e5, #db2777);
+          background: var(--brand-gradient);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
         }
 
         .auth-description {
-          margin: 0; font-size: 1.1rem; color: #475569; line-height: 1.6; max-width: 480px;
+          margin: 0; font-size: 1.1rem; color: var(--text-2); line-height: 1.6; max-width: 480px;
         }
 
         .feature-chips {
@@ -177,8 +210,8 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
         .feature-chip {
           display: inline-flex; align-items: center; gap: 6px;
           padding: 8px 14px; border-radius: 999px;
-          background: #ffffff; border: 1px solid #e2e8f0;
-          font-size: 0.85rem; font-weight: 600; color: #334155;
+          background: var(--surface); border: 1px solid var(--line);
+          font-size: 0.85rem; font-weight: 600; color: var(--text-2);
           box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
 
@@ -191,11 +224,17 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
           padding: 40px;
           box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.5);
+          transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+        [data-theme="dark"] .auth-form-card {
+          background: rgba(30, 41, 59, 0.78);
+          border-color: rgba(148, 163, 184, 0.16);
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2);
         }
 
         .form-header { margin-bottom: 32px; text-align: center; }
-        .form-header h2 { margin: 0; font-size: 1.75rem; font-weight: 800; color: #0f172a; }
-        .form-header p { margin: 8px 0 0; font-size: 0.9rem; color: #64748b; }
+        .form-header h2 { margin: 0; font-size: 1.75rem; font-weight: 800; color: var(--text); }
+        .form-header p { margin: 8px 0 0; font-size: 0.9rem; color: var(--text-2); }
 
         .modern-login-form {
           display: flex; flex-direction: column; gap: 20px;
@@ -205,15 +244,15 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
           display: flex; flex-direction: column; gap: 8px;
         }
         .input-group label {
-          font-size: 0.85rem; font-weight: 700; color: #334155; margin-left: 4px;
+          font-size: 0.85rem; font-weight: 700; color: var(--text-2); margin-left: 4px;
         }
         
         .input-wrapper { position: relative; display: flex; align-items: center; }
-        .input-icon { position: absolute; left: 16px; color: #94a3b8; pointer-events: none; }
+        .input-icon { position: absolute; left: 16px; color: var(--muted); pointer-events: none; }
         .input-wrapper input {
           width: 100%; padding: 14px 16px 14px 44px;
-          border-radius: 12px; border: 1px solid #cbd5e1; background: #ffffff;
-          font-size: 0.95rem; color: #1e293b; transition: all 0.2s;
+          border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface);
+          font-size: 0.95rem; color: var(--text); transition: all 0.2s;
         }
         .input-wrapper input:focus {
           border-color: #6366f1; outline: none;
@@ -226,32 +265,32 @@ function LoginPage({ onLogin, onContinueAsGuest }: LoginPageProps) {
 
         .btn-primary-auth {
           display: flex; justify-content: center; align-items: center; gap: 10px;
-          width: 100%; padding: 14px; border-radius: 12px;
-          background: linear-gradient(135deg, #4f46e5, #6366f1);
+          width: 100%; padding: 14px; border-radius: 999px;
+          background: var(--brand-gradient);
           color: #ffffff; font-size: 1rem; font-weight: 700; border: none;
           cursor: pointer; transition: all 0.2s;
-          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+          box-shadow: 0 6px 16px rgba(109, 94, 247, 0.35);
         }
         .btn-primary-auth:hover {
-          transform: translateY(-2px); box-shadow: 0 8px 16px rgba(79, 70, 229, 0.4); filter: brightness(1.05);
+          transform: translateY(-2px); box-shadow: 0 10px 22px rgba(109, 94, 247, 0.45); filter: brightness(1.05);
         }
 
         .auth-divider {
-          display: flex; align-items: center; text-align: center; color: #94a3b8; font-size: 0.85rem; font-weight: 600;
+          display: flex; align-items: center; text-align: center; color: var(--muted); font-size: 0.85rem; font-weight: 600;
         }
         .auth-divider::before, .auth-divider::after {
-          content: ''; flex: 1; border-bottom: 1px solid #e2e8f0;
+          content: ''; flex: 1; border-bottom: 1px solid var(--line);
         }
         .auth-divider span { padding: 0 12px; }
 
         .btn-guest-auth {
           display: flex; justify-content: center; align-items: center; gap: 8px;
-          width: 100%; padding: 14px; border-radius: 12px;
-          background: transparent; color: #475569; border: 1px solid #cbd5e1;
+          width: 100%; padding: 14px; border-radius: 999px;
+          background: transparent; color: var(--text-2); border: 1px solid var(--line-strong);
           font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
         }
         .btn-guest-auth:hover {
-          background: #f1f5f9; color: #0f172a; border-color: #94a3b8;
+          background: var(--surface-soft); color: var(--text); border-color: var(--muted);
         }
 
         /* ================= RESPONSIVE (MOBILE) ================= */

@@ -11,9 +11,11 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Moon,
   Plus,
   Search,
   Sparkles,
+  Sun,
   Trash2
 } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
@@ -34,6 +36,8 @@ interface SidebarProps {
   onDeleteProject: (projectId: string) => void;
   onImportProject: (file: File) => void;
   onLogout: () => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
 interface ModelOption {
@@ -94,6 +98,8 @@ function Sidebar({
   onDeleteProject,
   onImportProject,
   onLogout,
+  theme,
+  onToggleTheme,
 }: SidebarProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   
@@ -374,8 +380,17 @@ function Sidebar({
 
         </div>
 
-        {/* 6. Footer (Logout) */}
+        {/* 6. Footer (Theme + Logout) */}
         <div className="vsb-footer">
+          <button
+            className={`theme-switch-btn ${collapsed ? 'tooltip-right' : ''}`}
+            data-tooltip={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+            onClick={onToggleTheme}
+            aria-label={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            {!collapsed && <span>{theme === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}</span>}
+          </button>
           <button className="logout-btn" onClick={onLogout} title="ออกจากระบบ">
             <LogOut size={16} className="logout-icon" />
             {!collapsed && <span>ออกจากระบบ</span>}
@@ -385,25 +400,25 @@ function Sidebar({
 
       {/* CSS สีสันสดใส & Layout ห้าม Scroll มั่ว */}
       <style>{`
-        /* ตัวแปรสีสันใหม่สำหรับ Sidebar นี้โดยเฉพาะ */
-        :root {
-          --vsb-blue-bg: #e0e7ff; --vsb-blue-text: #4338ca;
-          --vsb-purple-bg: #fae8ff; --vsb-purple-text: #a21caf;
-          --vsb-orange-bg: #ffedd5; --vsb-orange-text: #c2410c;
+        /* ตัวแปรสีสันใหม่สำหรับ Sidebar นี้โดยเฉพาะ (ผูกกับโทนสีรวมของแอป) */
+        .vibrant-sidebar {
+          --vsb-blue-bg: var(--sky-soft); --vsb-blue-text: var(--sky);
+          --vsb-purple-bg: var(--pink-soft); --vsb-purple-text: var(--pink);
+          --vsb-orange-bg: var(--orange-soft); --vsb-orange-text: var(--orange);
         }
 
         .vibrant-sidebar {
           position: relative;
           width: 270px;
           height: 100dvh;
-          background: #ffffff;
+          background: var(--surface);
           border-right: 1px solid var(--line);
           display: flex;
           flex-direction: column;
           font-size: 14px;
-          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease;
           overflow: visible; /* ให้ปุ่มขอบลอยทะลุได้ */
-          box-shadow: 2px 0 20px rgba(0,0,0,0.03);
+          box-shadow: var(--shadow);
           z-index: 50;
         }
         .vibrant-sidebar.is-collapsed { width: 72px; }
@@ -416,7 +431,7 @@ function Sidebar({
           width: 24px;
           height: 24px;
           border-radius: 50%;
-          background: #ffffff;
+          background: var(--surface);
           border: 1px solid var(--line-strong);
           color: var(--text-2);
           display: flex; align-items: center; justify-content: center;
@@ -440,12 +455,12 @@ function Sidebar({
         .is-collapsed .vsb-header { justify-content: center; padding-inline: 0; }
         .vsb-brand-mark {
           flex: 0 0 36px; width: 36px; height: 36px;
-          display: grid; place-items: center; border-radius: 10px;
-          background: linear-gradient(135deg, #4f46e5, #ec4899);
+          display: grid; place-items: center; border-radius: 12px;
+          background: var(--brand-gradient);
           box-shadow: 0 4px 10px rgba(236, 72, 153, 0.3);
         }
         .vsb-brand-text h2 { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--text); }
-        .vsb-brand-text p { margin: 0; font-size: 0.75rem; color: #ec4899; font-weight: 600; }
+        .vsb-brand-text p { margin: 0; font-size: 0.75rem; color: var(--pink); font-weight: 600; }
 
         /* 2. Search */
         .vsb-search-wrap { padding: 0 16px 12px; flex-shrink: 0; border-bottom: 1px solid var(--line); }
@@ -459,11 +474,11 @@ function Sidebar({
         .vsb-search { position: relative; display: flex; align-items: center; }
         .vsb-search .icon { position: absolute; left: 12px; color: var(--muted); }
         .vsb-search input {
-          width: 100%; padding: 8px 12px 8px 36px; border-radius: 8px;
+          width: 100%; padding: 8px 12px 8px 36px; border-radius: 12px;
           border: 1px solid transparent; background: var(--surface-soft);
           font-size: 0.85rem; transition: all 0.2s;
         }
-        .vsb-search input:focus { border-color: var(--primary-line); background: #fff; box-shadow: 0 0 0 3px var(--primary-soft); }
+        .vsb-search input:focus { border-color: var(--primary-line); background: var(--surface); box-shadow: 0 0 0 3px var(--primary-soft); }
 
         /* 3. Main Content Wrapper */
         .vsb-main-content {
@@ -491,7 +506,7 @@ function Sidebar({
         .title-group { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); font-size: 0.9rem; }
         .is-collapsed .title-group { justify-content: center; }
         .icon-box {
-          width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px;
+          width: 26px; height: 26px; display: grid; place-items: center; border-radius: 9px;
         }
         .bg-blue { background: var(--vsb-blue-bg); color: var(--vsb-blue-text); }
         .bg-purple { background: var(--vsb-purple-bg); color: var(--vsb-purple-text); }
@@ -501,8 +516,8 @@ function Sidebar({
         
         .action-group { display: flex; gap: 6px; }
         .icon-btn {
-          width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px;
-          border: 1px solid var(--line); background: #fff; color: var(--text-2); cursor: pointer; transition: all 0.2s;
+          width: 26px; height: 26px; display: grid; place-items: center; border-radius: 9px;
+          border: 1px solid var(--line); background: var(--surface); color: var(--text-2); cursor: pointer; transition: all 0.2s;
         }
         .icon-btn:hover { background: var(--surface-soft); color: var(--text); }
         .icon-btn.primary { background: var(--primary-soft); border-color: transparent; color: var(--primary); }
@@ -515,7 +530,7 @@ function Sidebar({
           place-items: center;
           border-radius: 7px;
           border: 1px solid var(--line);
-          background: #fff;
+          background: var(--surface);
           color: var(--text-2);
           cursor: pointer;
         }
@@ -536,7 +551,7 @@ function Sidebar({
         
         .project-item {
           display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 4px; align-items: center;
-          margin-bottom: 4px; border-radius: 8px; transition: all 0.2s;
+          margin-bottom: 4px; border-radius: 12px; transition: all 0.2s;
         }
         .is-collapsed .project-item { grid-template-columns: 1fr; }
         .project-item:hover { background: var(--surface-soft); }
@@ -549,7 +564,7 @@ function Sidebar({
         }
         .project-delete-btn {
           width: 28px; height: 28px; display: grid; place-items: center;
-          border-radius: 6px; border: 1px solid transparent; background: transparent;
+          border-radius: 9px; border: 1px solid transparent; background: transparent;
           color: var(--muted); cursor: pointer;
         }
         .project-delete-btn:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-soft); }
@@ -574,8 +589,8 @@ function Sidebar({
         .ai-task-usage strong { width: 100%; color: var(--text-2); font-size: 0.68rem; }
         .ai-task-usage span { border: 1px solid var(--primary-line); border-radius: 999px; background: var(--primary-soft); color: var(--primary); padding: 2px 6px; font-size: 0.62rem; }
         .input-group select {
-          width: 100%; padding: 6px 8px; font-size: 0.8rem; border-radius: 6px;
-          border: 1px solid var(--line); background: #fff; outline: none;
+          width: 100%; padding: 6px 8px; font-size: 0.8rem; border-radius: 9px;
+          border: 1px solid var(--line); background: var(--surface); color: var(--text); outline: none;
         }
         .input-group select:focus { border-color: var(--primary); }
         .api-key-group { border-top: 1px solid var(--line); padding-top: 8px; }
@@ -593,14 +608,14 @@ function Sidebar({
         .api-key-actions .save-key-button:disabled { opacity: 0.45; }
         .key-status { margin-right: auto; color: var(--muted); font-size: 0.67rem; }
         .key-status.configured { color: var(--ok); }
-        .api-key-warning { margin: 0; border-radius: 6px; background: var(--warning-soft); color: var(--warning); padding: 7px; font-size: 0.66rem; line-height: 1.4; }
+        .api-key-warning { margin: 0; border-radius: 9px; background: var(--warning-soft); color: var(--warning); padding: 7px; font-size: 0.66rem; line-height: 1.4; }
 
         /* Presets */
         .preset-list { gap: 6px; }
         .preset-btn {
           display: flex; align-items: center; justify-content: space-between;
-          width: 100%; padding: 8px 10px; background: #fff; border: 1px solid var(--line);
-          border-radius: 8px; cursor: pointer; transition: all 0.2s;
+          width: 100%; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line);
+          border-radius: 12px; cursor: pointer; transition: all 0.2s;
         }
         .preset-btn:hover { border-color: var(--vsb-orange-text); background: var(--vsb-orange-bg); transform: translateY(-1px); box-shadow: 0 4px 8px rgba(194, 65, 12, 0.1); }
         .preset-info { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
@@ -608,17 +623,26 @@ function Sidebar({
         .preset-badge { font-size: 0.65rem; color: var(--text-2); }
         .preset-action {
           width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%;
-          background: #fff; color: var(--vsb-orange-text); opacity: 0.5; transition: all 0.2s;
+          background: var(--surface); color: var(--vsb-orange-text); opacity: 0.5; transition: all 0.2s;
         }
         .preset-btn:hover .preset-action { opacity: 1; background: var(--vsb-orange-text); color: #fff; }
 
-        /* Footer (Logout) */
+        /* Footer (Theme + Logout) */
         .vsb-footer {
+          display: grid; gap: 8px;
           padding: 16px; border-top: 1px solid var(--line); flex-shrink: 0;
         }
+        .theme-switch-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; padding: 10px; border-radius: 12px;
+          background: var(--surface-soft); border: 1px solid var(--line);
+          color: var(--text-2); font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+        }
+        .theme-switch-btn:hover { border-color: var(--primary-line); background: var(--primary-soft); color: var(--primary); }
+        .is-collapsed .theme-switch-btn { padding: 10px 0; }
         .logout-btn {
           display: flex; align-items: center; justify-content: center; gap: 8px;
-          width: 100%; padding: 10px; border-radius: 8px;
+          width: 100%; padding: 10px; border-radius: 12px;
           background: var(--danger-soft); border: 1px solid transparent;
           color: var(--danger); font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
         }

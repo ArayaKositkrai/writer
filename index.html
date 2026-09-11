@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Novel Studio</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('novel_studio_theme_v1');
+          var theme = saved === 'light' || saved === 'dark'
+            ? saved
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (error) {
+          /* localStorage unavailable, keep default light theme */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

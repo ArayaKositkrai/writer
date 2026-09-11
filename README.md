@@ -9,11 +9,8 @@ npm run dev
 
 ## ใช้ Gemma 4
 
-Gemma 4 ไม่มีรุ่น 24B อย่างเป็นทางการ รุ่นที่ใกล้เคียงคือ **26B A4B** (25.2B parameters, ทำงานประมาณ 4B parameters ต่อ token)
-
 - Google AI: เลือก `Google AI (Gemini/Gemma)` → `Gemma 4 26B A4B` และใส่ Google AI API key
 - Ollama local: ติดตั้ง Ollama แล้วรัน:
-
 
 ```bash
 ollama pull gemma4:e4b
@@ -44,8 +41,6 @@ ollama serve
 - **Live API** เรียก Gemini หรือ OpenAI จริงตาม provider/model ที่เลือก
 
 สำหรับ Live API ให้กรอก API key ของ provider แล้วกด **บันทึก** Key จะเก็บใน `sessionStorage` ของแท็บปัจจุบันเท่านั้นและจะหายเมื่อปิดแท็บ
-
-> การเรียก API จาก browser ทำให้ key เข้าถึงได้จาก JavaScript เหมาะสำหรับใช้งานส่วนตัวแบบ BYOK เท่านั้น ไม่ควร deploy เป็นเว็บสาธารณะโดยไม่มี backend proxy
 
 ## ตรวจสอบ production build
 
